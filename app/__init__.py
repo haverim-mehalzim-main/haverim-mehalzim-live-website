@@ -2,6 +2,9 @@ import os
 from flask import Flask, request, redirect, send_from_directory
 from flask_cors import CORS
 
+from app import config
+from app.extensions import db, migrate
+
 _DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
 
 # Path prefixes that must never be indexed by search engines. Kept out of
@@ -13,6 +16,13 @@ _NOINDEX_PREFIXES = ('/admin/', '/my-impact/', '/track/', '/api/', '/donate/')
 def create_app():
     app = Flask(__name__)
     CORS(app)
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = config.SQLALCHEMY_DATABASE_URI
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
+    db.init_app(app)
+    migrate.init_app(app, db, directory=os.path.join(os.path.dirname(__file__), '..', 'migrations'))
+
+    from app import models  # noqa: F401 — registers models on db.metadata before migrations run
 
     # API routes
     from app.features.incidents.routes import incidents_bp

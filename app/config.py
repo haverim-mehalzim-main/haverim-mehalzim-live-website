@@ -17,6 +17,25 @@ MONDAY_HEADERS = {
     "Content-Type": "application/json"
 }
 
+# ── Application database (Postgres, e.g. Railway's managed Postgres plugin) ──
+# Railway injects DATABASE_URL automatically once the Postgres plugin is added
+# and linked to this service. It arrives as "postgresql://..." (sometimes the
+# legacy "postgres://" scheme) — SQLAlchemy needs the driver named explicitly,
+# so we rewrite the scheme to force the psycopg (v3) driver regardless of which
+# variant is supplied.
+_RAW_DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+
+def _normalize_database_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+SQLALCHEMY_DATABASE_URI = _normalize_database_url(_RAW_DATABASE_URL)
+
 # ── Tranzila payment gateway ─────────────────────────────────────────────────
 # Regular (non-token) terminal — we only take one-time charges, so no need for
 # the tokens terminal. Credentials live in .env (never hardcode).

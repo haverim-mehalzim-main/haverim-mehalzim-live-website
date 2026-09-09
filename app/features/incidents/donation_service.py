@@ -35,8 +35,10 @@ from app.config import (
     MONDAY_URL, MONDAY_HEADERS,
     DONATIONS_BOARD_ID, DONORS_BOARD_ID,
 )
+from app.extensions import db
 from app.features.incidents.constants import IMPACT_LINK_MIN_USD
 from app.features.incidents.payment_service import to_usd
+from app.services.account_service import ensure_donor_account
 
 # ── Donations board columns ──────────────────────────────────────────────────
 # Defaults are baked in (not just left to env) because production runs on Render,
@@ -411,14 +413,34 @@ def record_confirmed_payment(payment: dict, date_iso: str) -> dict:
               f"donation {existing_id} already recorded, skipping")
         return {"donor_id": None, "donation_id": existing_id, "token": None, "duplicate": True}
 
+    amount_usd = to_usd(payment["amount"], payment.get("currency", ""))
+
     donor_id, token = find_or_create_donor(
         payment.get("donor_name", ""),
         payment.get("donor_email", ""),
         payment.get("donor_phone", ""),
         payment["amount"],
-        amount_usd=to_usd(payment["amount"], payment.get("currency", "")),
+        amount_usd=amount_usd,
     )
     donation_id = record_donation(payment, date_iso, donor_id)
     if donor_id and donation_id:
         link_donation_to_donor(donor_id, donation_id)
+
+    # Mirror into the local Postgres identity tables (implicit account
+    # creation). Best-effort: Monday.com above is still what donors actually
+    # see today, so a bug in this newer path must not break their donation.
+    try:
+        ensure_donor_account(
+            name=payment.get("donor_name", ""),
+            email=payment.get("donor_email", ""),
+            phone=payment.get("donor_phone", ""),
+            amount_usd=amount_usd,
+            impact_token=token,
+            donation_date_iso=date_iso,
+        )
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[donation_service] local account sync failed (non-fatal): {e}")
+
     return {"donor_id": donor_id, "donation_id": donation_id, "token": token, "duplicate": False}
