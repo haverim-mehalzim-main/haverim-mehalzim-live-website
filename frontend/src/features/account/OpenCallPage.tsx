@@ -12,6 +12,12 @@ export default function OpenCallPage() {
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [lifeThreatening, setLifeThreatening] = useState(false);
+  const [filerName, setFilerName] = useState('');
+  const [filerPhone, setFilerPhone] = useState('');
+  const [patientName, setPatientName] = useState('');
+  const [patientAge, setPatientAge] = useState('');
+  const [patientGender, setPatientGender] = useState('');
+  const [patientPhone, setPatientPhone] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -27,12 +33,19 @@ export default function OpenCallPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (user?.full_name) setFilerName(prev => prev || user.full_name);
+  }, [user]);
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!incidentType)        { setError('Please choose an incident type.'); return; }
-    if (!location.trim())     { setError('Please enter a location.'); return; }
-    if (!description.trim()) { setError('Please describe what happened and what you need.'); return; }
+    if (!incidentType)          { setError('Please choose an incident type.'); return; }
+    if (!location.trim())       { setError('Please enter a location.'); return; }
+    if (!description.trim())    { setError('Please describe what happened and what you need.'); return; }
+    if (!filerName.trim())      { setError('Please enter the name of the person filling in this form.'); return; }
+    if (!filerPhone.trim())     { setError('Please enter a phone number for the person filling in this form.'); return; }
+    if (!patientName.trim())    { setError('Please enter the full name of the patient/missing person.'); return; }
 
     setBusy(true);
     try {
@@ -44,6 +57,12 @@ export default function OpenCallPage() {
           location: location.trim(),
           description: description.trim(),
           life_threatening: lifeThreatening,
+          filer_name: filerName.trim(),
+          filer_phone: filerPhone.trim(),
+          patient_name: patientName.trim(),
+          patient_age: patientAge.trim() ? Number(patientAge) : undefined,
+          patient_gender: patientGender || undefined,
+          patient_phone: patientPhone.trim(),
         }),
       });
       const json = await res.json();
@@ -128,6 +147,77 @@ export default function OpenCallPage() {
             <label className="account-checkbox-row">
               <input type="checkbox" checked={lifeThreatening} onChange={e => setLifeThreatening(e.target.checked)} />
               This is a life-threatening emergency
+            </label>
+
+            <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Your details</div>
+
+            <label className="account-label">
+              Your full name (person filling in this form)
+              <input
+                className="account-input"
+                value={filerName}
+                onChange={e => setFilerName(e.target.value)}
+                placeholder="Full name"
+              />
+            </label>
+
+            <label className="account-label">
+              Your phone number
+              <input
+                className="account-input"
+                value={filerPhone}
+                onChange={e => setFilerPhone(e.target.value)}
+                placeholder="e.g. +972 50 123 4567"
+              />
+            </label>
+
+            <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Patient / missing person details</div>
+
+            <label className="account-label">
+              Full name
+              <input
+                className="account-input"
+                value={patientName}
+                onChange={e => setPatientName(e.target.value)}
+                placeholder="Full name"
+              />
+            </label>
+
+            <label className="account-label">
+              Age
+              <input
+                className="account-input"
+                type="number"
+                min={0}
+                max={150}
+                value={patientAge}
+                onChange={e => setPatientAge(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+
+            <label className="account-label">
+              Gender
+              <select
+                className="account-select"
+                value={patientGender}
+                onChange={e => setPatientGender(e.target.value)}
+              >
+                <option value="">Prefer not to say</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+
+            <label className="account-label">
+              Phone number
+              <input
+                className="account-input"
+                value={patientPhone}
+                onChange={e => setPatientPhone(e.target.value)}
+                placeholder="Optional"
+              />
             </label>
 
             {error && <div className="account-error">{error}</div>}

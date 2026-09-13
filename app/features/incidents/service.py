@@ -4,7 +4,7 @@ from datetime import datetime
 
 import requests
 from app.config import BOARD_ID, MONDAY_URL, MONDAY_HEADERS
-from app.features.incidents.constants import INCIDENT_TYPE_TRANSLATIONS, NEW_REQUEST_STATUS
+from app.features.incidents.constants import INCIDENT_TYPE_TRANSLATIONS, NEW_REQUEST_STATUS, GENDER_TRANSLATIONS
 
 # Only the columns the app actually uses — avoids fetching stale / irrelevant data.
 _NEEDED_COLUMNS = [
@@ -17,6 +17,10 @@ _NEEDED_COLUMNS = [
     "timeline_mkmbcabh", # date range for current-month filter
     "text_mm42945p",     # incident description (what happened)
     "text_mm2rbp1q",     # incident assistance (how we helped)
+    "numeric_mkng2emx",  # patient/victim age
+    "color_mkngmw3",     # patient/victim gender
+    "phone_mkz3dr0y",    # patient/victim phone (structured column, rarely set via self-service — see create_incident)
+    "text_mkz3yv22",     # filer's name + phone (free text)
 ]
 
 _COL_IDS = ', '.join(f'"{c}"' for c in _NEEDED_COLUMNS)
@@ -111,27 +115,54 @@ def fetch_monday_data():
 #   description below instead, and kept verbatim in our own DB
 #   (Incident.submitted_location) for "my incidents" to display.
 #
+#   phone_mkz3dr0y (patient's phone, a structured "phone" column) — Monday
+#   validates this against a phone number + ISO-2 country code; our minimal
+#   form collects neither format nor country, so a raw digit string would be
+#   rejected the same way the location column was. The submitted number is
+#   folded into the description below instead, and kept verbatim in our own
+#   DB (Incident.submitted_patient_phone) for display.
+#
 # status_mkmbjwef (map status) IS explicitly set — to NEW_REQUEST_STATUS, not
 # left at Monday's own column default. The board's default label ("Working
 # on it") is itself one of the live-map statuses, so leaving it unset would
 # have put an unreviewed incident straight onto the public map anyway.
+#
+# name (item title) is set to the patient/victim's name, matching the
+# convention already used by every existing item on this board — NOT the
+# filer's name (see _FILER_COL below for that).
 _STATUS_MAP_COL     = "status_mkmbjwef"
 _TYPE_COL           = "status_mkmb1zc6"   # incident type (Hebrew label)
 _LIFE_THREAT_COL    = "check_mkn3c7v8"
 _TIMELINE_COL       = "timeline_mkmbcabh"
 _TRACKER_STAGE_COL  = "color_mm32c8wh"    # public case-tracker stage
 _DESCRIPTION_COL    = "text_mm42945p"
+_PATIENT_AGE_COL    = "numeric_mkng2emx"
+_PATIENT_GENDER_COL = "color_mkngmw3"
+_FILER_COL          = "text_mkz3yv22"     # free text: filer's name + phone
 
 # The form shows English incident-type labels; Monday's column stores the
 # Hebrew value the board's labels are actually configured with.
 _ENGLISH_TO_HEBREW_TYPE = {v: k for k, v in INCIDENT_TYPE_TRANSLATIONS.items()}
+_ENGLISH_TO_HEBREW_GENDER = {v: k for k, v in GENDER_TRANSLATIONS.items()}
 
 
 def _escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
-def create_incident(*, incident_type: str, location: str, description: str, life_threatening: bool, requester_name: str) -> str | None:
+def create_incident(
+    *,
+    incident_type: str,
+    location: str,
+    description: str,
+    life_threatening: bool,
+    patient_name: str,
+    filer_name: str,
+    filer_phone: str = "",
+    patient_age: int | None = None,
+    patient_gender: str = "",
+    patient_phone: str = "",
+) -> str | None:
     """
     Create a new incident item from a logged-in user's "Open a Call"
     submission. Returns the new Monday item id, or None on failure.
@@ -142,7 +173,16 @@ def create_incident(*, incident_type: str, location: str, description: str, life
 
     today = datetime.now().strftime("%Y-%m-%d")
     hebrew_type = _ENGLISH_TO_HEBREW_TYPE.get(incident_type, incident_type)
-    full_description = f"Location (as reported): {location}\n\n{description}"
+
+    description_parts = [f"Location (as reported): {location}"]
+    if patient_phone:
+        description_parts.append(f"Patient/missing person phone (as reported): {patient_phone}")
+    description_parts.append(description)
+    full_description = "\n\n".join(description_parts)
+
+    filer_info = filer_name
+    if filer_phone:
+        filer_info = f"{filer_name} — {filer_phone}"
 
     values: dict = {
         _STATUS_MAP_COL:     {"label": NEW_REQUEST_STATUS},
@@ -150,12 +190,18 @@ def create_incident(*, incident_type: str, location: str, description: str, life
         _TIMELINE_COL:       {"from": today, "to": today},
         _TRACKER_STAGE_COL:  {"label": "Request Received"},
         _DESCRIPTION_COL:    full_description,
+        _FILER_COL:          filer_info,
     }
     if life_threatening:
         values[_LIFE_THREAT_COL] = {"checked": "true"}
+    if patient_age is not None:
+        values[_PATIENT_AGE_COL] = str(patient_age)
+    if patient_gender:
+        hebrew_gender = _ENGLISH_TO_HEBREW_GENDER.get(patient_gender, patient_gender)
+        values[_PATIENT_GENDER_COL] = {"label": hebrew_gender}
 
     col_values = _escape(json.dumps(values))
-    item_name = _escape(f"{requester_name} — {incident_type}" if requester_name else incident_type)
+    item_name = _escape(patient_name)
 
     query = f"""
       mutation {{

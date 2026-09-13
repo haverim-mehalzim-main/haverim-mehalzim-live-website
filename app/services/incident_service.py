@@ -16,11 +16,22 @@ from app.models import Incident, IncidentTask, IncidentTaskAssignee, IncidentTas
 from app.services.account_service import grant_role
 
 
-def create_incident_record(*, user_id: int, monday_item_id: str, submitted_location: str | None = None) -> Incident:
+def create_incident_record(
+    *,
+    user_id: int,
+    monday_item_id: str,
+    submitted_location: str | None = None,
+    submitted_patient_phone: str | None = None,
+) -> Incident:
     """Record that `user_id` opened `monday_item_id`, and grant the 'client'
     role (idempotent, matches the donor/premium pattern — a role reflecting
     a real action taken). Does not commit."""
-    incident = Incident(user_id=user_id, monday_item_id=str(monday_item_id), submitted_location=submitted_location)
+    incident = Incident(
+        user_id=user_id,
+        monday_item_id=str(monday_item_id),
+        submitted_location=submitted_location,
+        submitted_patient_phone=submitted_patient_phone,
+    )
     db.session.add(incident)
 
     from app.models import User

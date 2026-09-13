@@ -14,6 +14,11 @@ interface IncidentRow {
   handled: boolean;
   found_on_monday: boolean;
   owner: { email: string; full_name: string } | null;
+  patient_name: string;
+  patient_age: string;
+  patient_gender: string;
+  patient_phone: string;
+  filer_info: string;
 }
 
 interface Task {
@@ -164,6 +169,13 @@ function IncidentRowCard({ incident, token, expanded, onToggle }: {
             {incident.owner ? `${incident.owner.full_name} · ${incident.owner.email}` : 'no owner'}
             {!incident.found_on_monday && ' · ⚠ not found on Monday'}
           </div>
+          {(incident.patient_name || incident.filer_info) && (
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>
+              {incident.patient_name && `Patient: ${incident.patient_name}${incident.patient_age ? `, ${incident.patient_age}` : ''}${incident.patient_gender ? `, ${incident.patient_gender}` : ''}${incident.patient_phone ? ` · ${incident.patient_phone}` : ''}`}
+              {incident.patient_name && incident.filer_info && '  ·  '}
+              {incident.filer_info && `Filed by: ${incident.filer_info}`}
+            </div>
+          )}
         </div>
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{expanded ? '▲' : '▼'}</span>
       </div>

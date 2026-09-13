@@ -23,6 +23,13 @@ INCIDENT_TYPE_TRANSLATIONS = {
     'אחר':              'Other',
 }
 
+# color_mkngmw3 (patient/victim gender) Hebrew → English translations
+GENDER_TRANSLATIONS = {
+    'זכר':  'Male',
+    'נקבה': 'Female',
+    'אחר':  'Other',
+}
+
 ACTIVE_VOLUNTEERS_COUNT = 30
 
 # ── Donations / payments ─────────────────────────────────────────────────────

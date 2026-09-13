@@ -13,6 +13,11 @@ interface IncidentDetail {
   status_label: string;
   handled: boolean;
   found_on_monday: boolean;
+  patient_name: string;
+  patient_age: string;
+  patient_gender: string;
+  patient_phone: string;
+  filer_info: string;
 }
 
 interface Task {
@@ -129,6 +134,12 @@ export default function IncidentDetailPage() {
           {inc.description && (
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{inc.description}</p>
           )}
+
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.08))', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 4 }}>
+            {inc.patient_name && <div><strong>Patient/missing person:</strong> {inc.patient_name}{inc.patient_age ? `, age ${inc.patient_age}` : ''}{inc.patient_gender ? ` (${inc.patient_gender})` : ''}</div>}
+            {inc.patient_phone && <div><strong>Patient phone:</strong> {inc.patient_phone}</div>}
+            {inc.filer_info && <div><strong>Filed by:</strong> {inc.filer_info}</div>}
+          </div>
         </div>
 
         <div className="account-card">

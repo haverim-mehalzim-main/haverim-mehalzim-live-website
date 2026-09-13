@@ -40,6 +40,7 @@ from app.features.incidents.constants import (
     PREMIUM_PLAN_DEFAULT,
     USD_TO_ILS,
     INCIDENT_TYPE_TRANSLATIONS,
+    GENDER_TRANSLATIONS,
 )
 from app.extensions import db
 from app.services.auth_service import current_user
@@ -632,10 +633,23 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
     opened_date = timeline.split(' - ')[0].strip() if ' - ' in timeline else None
     status_label = row.get('color_mkvvrm1r', '')
 
+    hebrew_gender = row.get('color_mkngmw3', '')
+
     return {
         'id': local_incident.id,
         'monday_item_id': local_incident.monday_item_id,
+        # Monday's item title is the patient/missing person's name (matches
+        # the convention already used by every existing item on this board).
         'name': row.get('name', ''),
+        'patient_name': row.get('name', ''),
+        'patient_age': row.get('numeric_mkng2emx', ''),
+        'patient_gender': GENDER_TRANSLATIONS.get(hebrew_gender, hebrew_gender),
+        # Prefer what the requester actually typed (see
+        # Incident.submitted_patient_phone) over Monday's structured phone
+        # column, which our minimal form never populates (it requires a
+        # validated number + country code) but staff may fill in properly later.
+        'patient_phone': local_incident.submitted_patient_phone or row.get('phone_mkz3dr0y', ''),
+        'filer_info': row.get('text_mkz3yv22', ''),
         'incident_type': INCIDENT_TYPE_TRANSLATIONS.get(hebrew_type, hebrew_type),
         # Prefer what the requester actually typed (see Incident.submitted_location)
         # over Monday's structured location column, which our minimal form never
@@ -696,24 +710,57 @@ def open_incident():
     description   = str(body.get('description', '')).strip()[:2000]
     life_threatening = bool(body.get('life_threatening', False))
 
+    filer_name    = str(body.get('filer_name', '')).strip()[:200]
+    filer_phone   = str(body.get('filer_phone', '')).strip()[:40]
+    patient_name  = str(body.get('patient_name', '')).strip()[:200]
+    patient_phone = str(body.get('patient_phone', '')).strip()[:40]
+    patient_gender = str(body.get('patient_gender', '')).strip()
+
+    patient_age_raw = body.get('patient_age')
+    patient_age = None
+    if patient_age_raw not in (None, ''):
+        try:
+            patient_age = max(0, min(150, int(patient_age_raw)))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Please enter a valid age.'}), 400
+
+    if patient_gender and patient_gender not in GENDER_TRANSLATIONS.values():
+        return jsonify({'success': False, 'message': 'Please choose a valid gender.'}), 400
+
     if incident_type not in INCIDENT_TYPE_TRANSLATIONS.values():
         return jsonify({'success': False, 'message': 'Please choose a valid incident type.'}), 400
     if not location:
         return jsonify({'success': False, 'message': 'Please enter a location.'}), 400
     if not description:
         return jsonify({'success': False, 'message': 'Please describe what happened and what you need.'}), 400
+    if not filer_name:
+        return jsonify({'success': False, 'message': 'Please enter the name of the person filling in this form.'}), 400
+    if not filer_phone:
+        return jsonify({'success': False, 'message': 'Please enter a phone number for the person filling in this form.'}), 400
+    if not patient_name:
+        return jsonify({'success': False, 'message': 'Please enter the full name of the patient/missing person.'}), 400
 
     monday_item_id = create_incident(
         incident_type=incident_type,
         location=location,
         description=description,
         life_threatening=life_threatening,
-        requester_name=user.full_name,
+        patient_name=patient_name,
+        filer_name=filer_name,
+        filer_phone=filer_phone,
+        patient_age=patient_age,
+        patient_gender=patient_gender,
+        patient_phone=patient_phone,
     )
     if monday_item_id is None:
         return jsonify({'success': False, 'message': 'Could not open the call. Please try again shortly.'}), 502
 
-    incident = incident_service.create_incident_record(user_id=user.id, monday_item_id=monday_item_id, submitted_location=location)
+    incident = incident_service.create_incident_record(
+        user_id=user.id,
+        monday_item_id=monday_item_id,
+        submitted_location=location,
+        submitted_patient_phone=patient_phone or None,
+    )
     db.session.commit()
 
     return jsonify({'success': True, 'incident': {'id': incident.id, 'monday_item_id': monday_item_id}}), 200

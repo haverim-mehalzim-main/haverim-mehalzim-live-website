@@ -35,6 +35,11 @@ class Incident(db.Model):
     # typed regardless of whether/when staff later plot it precisely on
     # Monday's own location picker.
     submitted_location = db.Column(db.Text, nullable=True)
+    # Same reasoning as submitted_location: Monday's phone column requires a
+    # validated number + ISO-2 country code, which our minimal form doesn't
+    # collect. The patient's phone as typed is kept here for display; it's
+    # also folded into the Monday item's description for staff to see.
+    submitted_patient_phone = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
 
     user = db.relationship("User", back_populates="incidents")
