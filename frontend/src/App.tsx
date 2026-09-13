@@ -1,9 +1,8 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { DonateProvider } from './context/DonateContext';
 import { AuthProvider } from './context/AuthContext';
 import DashboardPage from './features/dashboard/DashboardPage';
-import TacticalGlobe from './features/map/TacticalGlobe';
 import FundOurTeamPage from './features/fund/FundOurTeamPage';
 import CaseTrackerPage from './features/tracker/CaseTrackerPage';
 import AdminFeedbackPage from './features/admin/AdminFeedbackPage';
@@ -13,6 +12,11 @@ import SignUpPage from './features/auth/SignUpPage';
 import LoginPage from './features/auth/LoginPage';
 import AccountPage from './features/auth/AccountPage';
 // import LeaderboardPage from './features/leaderboard/LeaderboardPage';
+
+// Lazy: this page alone pulls in three.js + react-globe.gl (~46MB of source,
+// the entire cause of the "chunk larger than 500kB" build warning) — nobody
+// should download that just to see the dashboard, only people who visit /map.
+const TacticalGlobe = lazy(() => import('./features/map/TacticalGlobe'));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -28,7 +32,20 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/"              element={<DashboardPage />} />
-        <Route path="/map"           element={<div style={{ width: '100dvw', height: '100dvh' }}><TacticalGlobe /></div>} />
+        <Route path="/map" element={
+          <Suspense fallback={
+            <div style={{
+              width: '100dvw', height: '100dvh', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              background: 'var(--bg-void)', color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.05em',
+            }}>
+              Loading map…
+            </div>
+          }>
+            <div style={{ width: '100dvw', height: '100dvh' }}><TacticalGlobe /></div>
+          </Suspense>
+        } />
         <Route path="/fund-our-team" element={<FundOurTeamPage />} />
         <Route path="/track/:caseId"   element={<CaseTrackerPage />} />
         <Route path="/admin/feedback"  element={<AdminFeedbackPage />} />
