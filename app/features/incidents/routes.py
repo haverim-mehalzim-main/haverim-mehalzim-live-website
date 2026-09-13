@@ -41,6 +41,8 @@ from app.features.incidents.constants import (
     USD_TO_ILS,
     INCIDENT_TYPE_TRANSLATIONS,
     GENDER_TRANSLATIONS,
+    COUNTRIES,
+    COUNTRY_NAME_BY_CODE,
 )
 from app.extensions import db
 from app.services.auth_service import current_user
@@ -651,12 +653,21 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         'patient_phone': local_incident.submitted_patient_phone or row.get('phone_mkz3dr0y', ''),
         'filer_info': row.get('text_mkz3yv22', ''),
         'incident_type': INCIDENT_TYPE_TRANSLATIONS.get(hebrew_type, hebrew_type),
-        # Prefer what the requester actually typed (see Incident.submitted_location)
-        # over Monday's structured location column, which our minimal form never
-        # populates (it requires real lat/lng) but staff may fill in properly later.
-        'location': local_incident.submitted_location or row.get('location_mkmbv7be', ''),
+        # City has no safe Monday column of its own (see create_incident) —
+        # kept locally. Country IS a real structured Monday column now, so
+        # its text comes straight from Monday like everything else.
+        'city': local_incident.submitted_location or '',
         'country': row.get('country_mkmb91h3', ''),
-        'description': row.get('text_mm42945p', ''),
+        'location': ', '.join(p for p in [local_incident.submitted_location, row.get('country_mkmb91h3', '')] if p),
+        # Prefer the requester's own untouched text (see
+        # Incident.submitted_description) over Monday's description column,
+        # which for a self-service incident holds the city/patient-phone
+        # folded in together (needed there since neither has a proper column
+        # to live in) — those are already shown separately elsewhere on this
+        # card, so repeating them here would just look like a garbled wall of
+        # text. Falls back to Monday's raw text for incidents opened any
+        # other way (no local row to prefer).
+        'description': local_incident.submitted_description or row.get('long_text_mkpfvmh3', ''),
         'life_threatening': bool(row.get('check_mkn3c7v8')),
         'opened_date': opened_date,
         'status_label': status_label,
@@ -686,6 +697,16 @@ def get_incident_types():
     return jsonify({'success': True, 'types': sorted(set(INCIDENT_TYPE_TRANSLATIONS.values()))}), 200
 
 
+@incidents_bp.route('/api/countries')
+def get_countries():
+    """Country list for the 'Open a Call' form's Country dropdown — same list
+    create_incident uses to write Monday's structured country column, so the
+    two can never drift apart (see COUNTRIES in constants.py)."""
+    resp = jsonify({'success': True, 'countries': [{'code': c, 'name': n} for c, n in COUNTRIES]})
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp, 200
+
+
 @incidents_bp.route('/api/incidents', methods=['POST'])
 def open_incident():
     user = current_user()
@@ -706,9 +727,9 @@ def open_incident():
     body = request.get_json(silent=True) or {}
 
     incident_type = str(body.get('incident_type', '')).strip()
-    location      = str(body.get('location', '')).strip()[:2000]
+    city          = str(body.get('city', '')).strip()[:200]
+    country_code  = str(body.get('country_code', '')).strip().upper()
     description   = str(body.get('description', '')).strip()[:2000]
-    life_threatening = bool(body.get('life_threatening', False))
 
     filer_name    = str(body.get('filer_name', '')).strip()[:200]
     filer_phone   = str(body.get('filer_phone', '')).strip()[:40]
@@ -729,8 +750,10 @@ def open_incident():
 
     if incident_type not in INCIDENT_TYPE_TRANSLATIONS.values():
         return jsonify({'success': False, 'message': 'Please choose a valid incident type.'}), 400
-    if not location:
-        return jsonify({'success': False, 'message': 'Please enter a location.'}), 400
+    if not city:
+        return jsonify({'success': False, 'message': 'Please enter a city.'}), 400
+    if country_code not in COUNTRY_NAME_BY_CODE:
+        return jsonify({'success': False, 'message': 'Please choose a valid country.'}), 400
     if not description:
         return jsonify({'success': False, 'message': 'Please describe what happened and what you need.'}), 400
     if not filer_name:
@@ -742,9 +765,9 @@ def open_incident():
 
     monday_item_id = create_incident(
         incident_type=incident_type,
-        location=location,
+        city=city,
+        country_code=country_code,
         description=description,
-        life_threatening=life_threatening,
         patient_name=patient_name,
         filer_name=filer_name,
         filer_phone=filer_phone,
@@ -758,8 +781,9 @@ def open_incident():
     incident = incident_service.create_incident_record(
         user_id=user.id,
         monday_item_id=monday_item_id,
-        submitted_location=location,
+        submitted_location=city,
         submitted_patient_phone=patient_phone or None,
+        submitted_description=description,
     )
     db.session.commit()
 

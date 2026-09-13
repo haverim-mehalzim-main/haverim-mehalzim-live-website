@@ -40,6 +40,14 @@ class Incident(db.Model):
     # collect. The patient's phone as typed is kept here for display; it's
     # also folded into the Monday item's description for staff to see.
     submitted_patient_phone = db.Column(db.Text, nullable=True)
+    # The raw "what happened" text as the requester typed it, with none of
+    # location/patient-phone folded in. Monday's own description column
+    # (text_mm42945p) holds the folded, staff-facing version instead — and
+    # is a plain "text" type that collapses newlines, so parsing our own
+    # prefixes back out of it isn't reliable. Kept here so "my incidents" /
+    # admin can show a clean description without duplicating the location
+    # and patient-phone fields already shown elsewhere on the card.
+    submitted_description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
 
     user = db.relationship("User", back_populates="incidents")

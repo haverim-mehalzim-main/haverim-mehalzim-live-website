@@ -140,6 +140,45 @@
   color: var(--text-muted);
 }
 
+.account-detail-desc-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.account-detail-desc-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.account-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px 20px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-mid);
+}
+
+.account-detail-item-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.account-detail-item-value {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
 .account-premium-card {
   background: var(--accent-amber-dim);
   border: 1px solid rgba(255, 185, 48, 0.3);

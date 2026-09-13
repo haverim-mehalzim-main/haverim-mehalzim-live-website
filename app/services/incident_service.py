@@ -22,6 +22,7 @@ def create_incident_record(
     monday_item_id: str,
     submitted_location: str | None = None,
     submitted_patient_phone: str | None = None,
+    submitted_description: str | None = None,
 ) -> Incident:
     """Record that `user_id` opened `monday_item_id`, and grant the 'client'
     role (idempotent, matches the donor/premium pattern — a role reflecting
@@ -31,6 +32,7 @@ def create_incident_record(
         monday_item_id=str(monday_item_id),
         submitted_location=submitted_location,
         submitted_patient_phone=submitted_patient_phone,
+        submitted_description=submitted_description,
     )
     db.session.add(incident)
 

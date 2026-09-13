@@ -8,10 +8,11 @@ export default function OpenCallPage() {
   const navigate = useNavigate();
 
   const [types, setTypes] = useState<string[]>([]);
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
   const [incidentType, setIncidentType] = useState('');
-  const [location, setLocation] = useState('');
+  const [city, setCity] = useState('');
+  const [countryCode, setCountryCode] = useState('');
   const [description, setDescription] = useState('');
-  const [lifeThreatening, setLifeThreatening] = useState(false);
   const [filerName, setFilerName] = useState('');
   const [filerPhone, setFilerPhone] = useState('');
   const [patientName, setPatientName] = useState('');
@@ -31,6 +32,15 @@ export default function OpenCallPage() {
         }
       })
       .catch(() => {});
+
+    fetch('/api/countries')
+      .then(r => r.json())
+      .then(j => {
+        if (j?.success && Array.isArray(j.countries)) {
+          setCountries(j.countries);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -41,7 +51,8 @@ export default function OpenCallPage() {
     e.preventDefault();
     setError('');
     if (!incidentType)          { setError('Please choose an incident type.'); return; }
-    if (!location.trim())       { setError('Please enter a location.'); return; }
+    if (!city.trim())           { setError('Please enter a city.'); return; }
+    if (!countryCode)           { setError('Please choose a country.'); return; }
     if (!description.trim())    { setError('Please describe what happened and what you need.'); return; }
     if (!filerName.trim())      { setError('Please enter the name of the person filling in this form.'); return; }
     if (!filerPhone.trim())     { setError('Please enter a phone number for the person filling in this form.'); return; }
@@ -54,9 +65,9 @@ export default function OpenCallPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           incident_type: incidentType,
-          location: location.trim(),
+          city: city.trim(),
+          country_code: countryCode,
           description: description.trim(),
-          life_threatening: lifeThreatening,
           filer_name: filerName.trim(),
           filer_phone: filerPhone.trim(),
           patient_name: patientName.trim(),
@@ -125,13 +136,25 @@ export default function OpenCallPage() {
             </label>
 
             <label className="account-label">
-              Location (city, country)
+              City
               <input
                 className="account-input"
-                value={location}
-                onChange={e => setLocation(e.target.value)}
-                placeholder="e.g. Bangkok, Thailand"
+                value={city}
+                onChange={e => setCity(e.target.value)}
+                placeholder="e.g. Bangkok"
               />
+            </label>
+
+            <label className="account-label">
+              Country
+              <select
+                className="account-select"
+                value={countryCode}
+                onChange={e => setCountryCode(e.target.value)}
+              >
+                <option value="">Select a country</option>
+                {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </select>
             </label>
 
             <label className="account-label">
@@ -142,11 +165,6 @@ export default function OpenCallPage() {
                 onChange={e => setDescription(e.target.value)}
                 placeholder="As much detail as you can — this helps us respond faster."
               />
-            </label>
-
-            <label className="account-checkbox-row">
-              <input type="checkbox" checked={lifeThreatening} onChange={e => setLifeThreatening(e.target.checked)} />
-              This is a life-threatening emergency
             </label>
 
             <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Your details</div>

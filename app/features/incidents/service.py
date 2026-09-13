@@ -4,7 +4,13 @@ from datetime import datetime
 
 import requests
 from app.config import BOARD_ID, MONDAY_URL, MONDAY_HEADERS
-from app.features.incidents.constants import INCIDENT_TYPE_TRANSLATIONS, NEW_REQUEST_STATUS, GENDER_TRANSLATIONS
+from app.features.incidents.constants import (
+    INCIDENT_TYPE_TRANSLATIONS,
+    NEW_REQUEST_STATUS,
+    GENDER_TRANSLATIONS,
+    COUNTRY_NAME_BY_CODE,
+    HEBREW_MONTHS,
+)
 
 # Only the columns the app actually uses — avoids fetching stale / irrelevant data.
 _NEEDED_COLUMNS = [
@@ -13,14 +19,15 @@ _NEEDED_COLUMNS = [
     "status_mkmb1zc6",   # incident type
     "location_mkmbv7be", # primary map coordinate
     "country_mkmb91h3",  # fallback map coordinate / country breakdown
-    "check_mkn3c7v8",    # life-threatening flag
+    "check_mkn3c7v8",    # life-threatening flag (set by staff, never by self-service)
     "timeline_mkmbcabh", # date range for current-month filter
-    "text_mm42945p",     # incident description (what happened)
+    "text_mm42945p",     # incident description (what happened) — staff-entered incidents
     "text_mm2rbp1q",     # incident assistance (how we helped)
     "numeric_mkng2emx",  # patient/victim age
     "color_mkngmw3",     # patient/victim gender
     "phone_mkz3dr0y",    # patient/victim phone (structured column, rarely set via self-service — see create_incident)
     "text_mkz3yv22",     # filer's name + phone (free text)
+    "long_text_mkpfvmh3", # incident description (what happened) — self-service-opened incidents (see create_incident)
 ]
 
 _COL_IDS = ', '.join(f'"{c}"' for c in _NEEDED_COLUMNS)
@@ -111,8 +118,8 @@ def fetch_monday_data():
 #
 #   location_mkmbv7be — Monday's "location" column requires real lat/lng
 #   coordinates (a plain address is rejected outright); our minimal form only
-#   collects free text, no geocoding. The submitted text is folded into the
-#   description below instead, and kept verbatim in our own DB
+#   collects a free-text city, no geocoding. The submitted city is folded
+#   into the description below instead, and kept verbatim in our own DB
 #   (Incident.submitted_location) for "my incidents" to display.
 #
 #   phone_mkz3dr0y (patient's phone, a structured "phone" column) — Monday
@@ -121,6 +128,12 @@ def fetch_monday_data():
 #   rejected the same way the location column was. The submitted number is
 #   folded into the description below instead, and kept verbatim in our own
 #   DB (Incident.submitted_patient_phone) for display.
+#
+#   check_mkn3c7v8 (life-threatening) — determined by staff after reviewing
+#   the case, not by whoever fills in the form. Left at Monday's own default.
+#
+#   timeline_mkmbcabh — staff set this once the case is actually being worked,
+#   not at the moment of a raw, unreviewed self-service submission.
 #
 # status_mkmbjwef (map status) IS explicitly set — to NEW_REQUEST_STATUS, not
 # left at Monday's own column default. The board's default label ("Working
@@ -132,13 +145,13 @@ def fetch_monday_data():
 # filer's name (see _FILER_COL below for that).
 _STATUS_MAP_COL     = "status_mkmbjwef"
 _TYPE_COL           = "status_mkmb1zc6"   # incident type (Hebrew label)
-_LIFE_THREAT_COL    = "check_mkn3c7v8"
-_TIMELINE_COL       = "timeline_mkmbcabh"
 _TRACKER_STAGE_COL  = "color_mm32c8wh"    # public case-tracker stage
-_DESCRIPTION_COL    = "text_mm42945p"
+_DESCRIPTION_COL    = "long_text_mkpfvmh3"  # long_text: {"text": "..."} — NOT the plain-string "text" format
 _PATIENT_AGE_COL    = "numeric_mkng2emx"
 _PATIENT_GENDER_COL = "color_mkngmw3"
 _FILER_COL          = "text_mkz3yv22"     # free text: filer's name + phone
+_COUNTRY_COL        = "country_mkmb91h3"  # structured: {"countryCode", "countryName"}
+_MONTH_COL          = "color_mkmby5dg"    # status label "<Hebrew month> <year>"
 
 # The form shows English incident-type labels; Monday's column stores the
 # Hebrew value the board's labels are actually configured with.
@@ -153,9 +166,9 @@ def _escape(s: str) -> str:
 def create_incident(
     *,
     incident_type: str,
-    location: str,
+    city: str,
+    country_code: str,
     description: str,
-    life_threatening: bool,
     patient_name: str,
     filer_name: str,
     filer_phone: str = "",
@@ -171,10 +184,12 @@ def create_incident(
         print("[service] BOARD_ID not set — cannot create incident")
         return None
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
     hebrew_type = _ENGLISH_TO_HEBREW_TYPE.get(incident_type, incident_type)
+    month_label = f"{HEBREW_MONTHS[now.month]} {now.year}"
+    country_name = COUNTRY_NAME_BY_CODE.get(country_code, country_code)
 
-    description_parts = [f"Location (as reported): {location}"]
+    description_parts = [f"City (as reported): {city}"]
     if patient_phone:
         description_parts.append(f"Patient/missing person phone (as reported): {patient_phone}")
     description_parts.append(description)
@@ -187,13 +202,12 @@ def create_incident(
     values: dict = {
         _STATUS_MAP_COL:     {"label": NEW_REQUEST_STATUS},
         _TYPE_COL:           {"label": hebrew_type},
-        _TIMELINE_COL:       {"from": today, "to": today},
         _TRACKER_STAGE_COL:  {"label": "Request Received"},
-        _DESCRIPTION_COL:    full_description,
+        _DESCRIPTION_COL:    {"text": full_description},
         _FILER_COL:          filer_info,
+        _COUNTRY_COL:        {"countryCode": country_code, "countryName": country_name},
+        _MONTH_COL:          {"label": month_label},
     }
-    if life_threatening:
-        values[_LIFE_THREAT_COL] = {"checked": "true"}
     if patient_age is not None:
         values[_PATIENT_AGE_COL] = str(patient_age)
     if patient_gender:

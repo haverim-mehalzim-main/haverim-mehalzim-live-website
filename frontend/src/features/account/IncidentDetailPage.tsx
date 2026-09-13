@@ -132,13 +132,35 @@ export default function IncidentDetailPage() {
             {inc.location}{inc.opened_date ? ` · opened ${inc.opened_date}` : ''}
           </div>
           {inc.description && (
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{inc.description}</p>
+            <>
+              <div className="account-detail-desc-label">What happened</div>
+              <p className="account-detail-desc-text">{inc.description}</p>
+            </>
           )}
 
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.08))', fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 4 }}>
-            {inc.patient_name && <div><strong>Patient/missing person:</strong> {inc.patient_name}{inc.patient_age ? `, age ${inc.patient_age}` : ''}{inc.patient_gender ? ` (${inc.patient_gender})` : ''}</div>}
-            {inc.patient_phone && <div><strong>Patient phone:</strong> {inc.patient_phone}</div>}
-            {inc.filer_info && <div><strong>Filed by:</strong> {inc.filer_info}</div>}
+          <div className="account-detail-grid">
+            {inc.patient_name && (
+              <div>
+                <div className="account-detail-item-label">Patient / missing person</div>
+                <div className="account-detail-item-value">
+                  {inc.patient_name}
+                  {inc.patient_age ? `, age ${inc.patient_age}` : ''}
+                  {inc.patient_gender ? ` (${inc.patient_gender})` : ''}
+                </div>
+              </div>
+            )}
+            {inc.patient_phone && (
+              <div>
+                <div className="account-detail-item-label">Patient phone</div>
+                <div className="account-detail-item-value">{inc.patient_phone}</div>
+              </div>
+            )}
+            {inc.filer_info && (
+              <div>
+                <div className="account-detail-item-label">Filed by</div>
+                <div className="account-detail-item-value">{inc.filer_info}</div>
+              </div>
+            )}
           </div>
         </div>
 
