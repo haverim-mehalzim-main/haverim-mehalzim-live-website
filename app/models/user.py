@@ -17,8 +17,9 @@ class User(db.Model):
     """Single identity anchor for every person who can log in or hold a role.
 
     A user is created eagerly (not on explicit sign-up) the first time someone
-    donates, matched/deduped by lowercased email — see DonorProfile. Roles
-    (admin, donor, ...) are additive via UserRole, never a fixed "type" here.
+    donates or buys premium, matched/deduped by lowercased email — see
+    DonorProfile / PremiumMembership. Roles (admin, donor, premium, ...) are
+    additive via UserRole, never a fixed "type" here.
     """
 
     __tablename__ = "users"
@@ -60,6 +61,8 @@ class User(db.Model):
         "UserRole", foreign_keys="UserRole.user_id", back_populates="user", cascade="all, delete-orphan"
     )
     donor_profile = db.relationship("DonorProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    premium_membership = db.relationship("PremiumMembership", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    payments = db.relationship("Payment", back_populates="user")
 
     def __repr__(self):
         return f"<User id={self.id} email={self.email!r}>"

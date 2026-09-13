@@ -45,3 +45,15 @@ AVG_MISSION_COST = 350
 # leaderboard (lives saved = cumulative USD // this). Donor amounts are stored in
 # USD, so this is USD-denominated too.
 COST_PER_LIFE = 5000
+
+# ── Premium membership ───────────────────────────────────────────────────────
+# Fixed one-time price for permanent premium status (24/7 availability + more,
+# still being finalized). PLACEHOLDER — replace once the offer is final. A
+# hardcoded business constant like the ones above, not env-driven, for the same
+# reason: a bad/missing env var must never change what someone is charged.
+PREMIUM_PRICE_USD = 500
+
+# Single plan for now; kept as a named constant (not inlined at call sites) so
+# adding a second tier later is a matter of introducing more plan names, not
+# hunting down every place "standard" was typed.
+PREMIUM_PLAN_DEFAULT = "standard"

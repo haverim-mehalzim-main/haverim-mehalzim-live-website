@@ -71,6 +71,11 @@ P_INCIDENT = "u_incident_id"
 P_PACKAGE  = "u_package_id"
 P_PKGLABEL = "u_package_label"
 P_SECRET   = "u_secret"
+# What this checkout is for — "donation" (default, existing behaviour
+# unchanged) or "premium_membership". Absent on any checkout built before this
+# param existed, which parse_notify below defaults to "donation" too, so an
+# in-flight donation checkout from before a deploy is unaffected.
+P_PURPOSE  = "u_purpose"
 
 
 def new_order_id() -> str:
@@ -96,7 +101,9 @@ def build_payment_url(order: dict) -> str | None:
 
     base = f"https://{TRANZILLA_HOST}/{TRANZILLA_TERMINAL}/iframenew.php"
 
-    pdesc = "תרומה - חברים מחלצים"
+    # "donation" label doesn't fit a premium purchase — a premium buyer should
+    # never see "donation" on the payment page they're about to pay on.
+    pdesc = "פרימיום - חברים מחלצים" if order.get("purpose") == "premium_membership" else "תרומה - חברים מחלצים"
     if order.get("package_label"):
         pdesc = f"{pdesc} · {order['package_label']}"
 
@@ -116,6 +123,7 @@ def build_payment_url(order: dict) -> str | None:
         P_INCIDENT: order.get("incident_id", ""),
         P_PACKAGE:  order.get("package_id", ""),
         P_PKGLABEL: order.get("package_label", ""),
+        P_PURPOSE:  order.get("purpose", "donation"),
     }
     if TRANZILLA_NOTIFY_SECRET:
         params[P_SECRET] = TRANZILLA_NOTIFY_SECRET
@@ -153,6 +161,7 @@ def parse_notify(values: dict) -> dict | None:
 
     return {
         "order_id":         order_id,
+        "purpose":          values.get(P_PURPOSE) or "donation",
         "incident_id":      values.get(P_INCIDENT) or "",
         "package_id":       values.get(P_PACKAGE) or "",
         "package_label":    values.get(P_PKGLABEL) or "",

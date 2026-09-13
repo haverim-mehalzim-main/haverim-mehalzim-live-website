@@ -36,6 +36,9 @@ from app.features.incidents.constants import (
     INCIDENT_HANDLED_BY_RON,
     SIGNIFICANT_INCIDENT,
     ACTIVE_VOLUNTEERS_COUNT,
+    PREMIUM_PRICE_USD,
+    PREMIUM_PLAN_DEFAULT,
+    USD_TO_ILS,
 )
 
 incidents_bp = Blueprint('incidents', __name__)
@@ -462,6 +465,86 @@ def donate_start():
     return jsonify({'success': True, 'payment_url': url, 'order_id': order['order_id']}), 200
 
 
+# ── Premium membership (Tranzila) ────────────────────────────────────────────
+_premium_rate: dict = defaultdict(lambda: {'count': 0, 'window_start': 0.0})
+_PREMIUM_RATE_MAX    = 15
+_PREMIUM_RATE_WINDOW = 60
+
+
+@incidents_bp.route('/api/premium/start', methods=['POST'])
+def premium_start():
+    """
+    Begin a premium-membership purchase — a fixed price (not user-adjustable,
+    unlike a donation), one-time payment that grants permanent premium status
+    on confirmation. See record_confirmed_premium_purchase in premium_service.
+    """
+    from flask import request
+    from app.services.premium_service import create_pending_payment
+
+    ip  = request.remote_addr or 'unknown'
+    now = _time.time()
+    bucket = _premium_rate[ip]
+    if now - bucket['window_start'] > _PREMIUM_RATE_WINDOW:
+        bucket['count'] = 0
+        bucket['window_start'] = now
+    bucket['count'] += 1
+    if bucket['count'] > _PREMIUM_RATE_MAX:
+        return jsonify({'success': False, 'message': 'Too many requests'}), 429
+
+    if not payment_configured():
+        return jsonify({'success': False, 'message': 'Payments are not configured'}), 503
+
+    body = request.get_json(silent=True) or {}
+
+    currency_name = str(body.get('currency', 'USD')).strip().upper()
+    if currency_name not in SUPPORTED_CURRENCIES:
+        return jsonify({'success': False, 'message': 'Unsupported currency'}), 400
+
+    donor_name  = str(body.get('donor_name', '')).strip()[:120]
+    donor_email = str(body.get('donor_email', '')).strip()[:200]
+    donor_phone = str(body.get('donor_phone', '')).strip()[:40]
+    if not donor_email:
+        return jsonify({'success': False, 'message': 'Email is required'}), 400
+
+    # Fixed product price — never trust a client-supplied amount here, unlike
+    # a donation where the donor picks the amount.
+    amount = PREMIUM_PRICE_USD if currency_name == 'USD' else round(PREMIUM_PRICE_USD * USD_TO_ILS, 2)
+    order_id = new_order_id()
+
+    try:
+        create_pending_payment(
+            order_id=order_id,
+            donor_name=donor_name,
+            donor_email=donor_email,
+            donor_phone=donor_phone,
+            amount=amount,
+            currency=currency_code(currency_name),
+            amount_usd=PREMIUM_PRICE_USD,
+            plan=PREMIUM_PLAN_DEFAULT,
+        )
+    except Exception as e:
+        print(f'[premium] failed to record pending payment: {e}')
+        return jsonify({'success': False, 'message': 'Could not start payment'}), 500
+
+    order = {
+        'order_id':      order_id,
+        'amount':        amount,
+        'currency':      currency_code(currency_name),
+        'package_id':    PREMIUM_PLAN_DEFAULT,
+        'package_label': 'Premium Membership',
+        'donor_name':    donor_name,
+        'donor_email':   donor_email,
+        'donor_phone':   donor_phone,
+        'purpose':       'premium_membership',
+    }
+
+    url = build_payment_url(order)
+    if not url:
+        return jsonify({'success': False, 'message': 'Could not start payment'}), 500
+
+    return jsonify({'success': True, 'payment_url': url, 'order_id': order_id}), 200
+
+
 @incidents_bp.route('/api/tranzilla/notify', methods=['GET', 'POST'])
 def tranzilla_notify():
     """
@@ -479,6 +562,22 @@ def tranzilla_notify():
     if payment is None:
         # Not approved or failed verification — acknowledge without recording.
         return jsonify({'success': False}), 200
+
+    if payment.get('purpose') == 'premium_membership':
+        from app.extensions import db
+        from app.services.premium_service import record_confirmed_premium_purchase
+        try:
+            result = record_confirmed_premium_purchase(payment, datetime.now().isoformat())
+            db.session.commit()
+            if result.get('duplicate'):
+                print(f'[notify] duplicate premium order {payment.get("order_id")} — skipping')
+            elif not result.get('user_id'):
+                print(f'[notify] premium order {payment.get("order_id")} confirmed with no linked account')
+            # TODO: premium welcome/confirmation email — not built yet.
+        except Exception as ex:
+            db.session.rollback()
+            print(f'[notify] error recording premium order {payment.get("order_id")}: {ex}')
+        return jsonify({'success': True}), 200
 
     try:
         result = record_confirmed_payment(payment, datetime.now().isoformat())
