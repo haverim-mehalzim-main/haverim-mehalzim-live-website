@@ -5,6 +5,7 @@ import type { DashboardData } from './types';
 import LiveMissionFeed from './LiveMissionFeed';
 import { Tooltip } from '../../components/Tooltip';
 import { useDonate } from '../../context/DonateContext';
+import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../assets/logo.png';
 import './dashboard.css';
 
@@ -1078,6 +1079,7 @@ function GeoPeriodModal({ currentMonth, lastMonth, data, onClose }: {
 
 export default function DashboardPage() {
   const { openDonate } = useDonate();
+  const { user } = useAuth();
   const [data, setData]             = useState<DashboardData | null>(null);
   const [error, setError]           = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string>('—');
@@ -1125,6 +1127,9 @@ export default function DashboardPage() {
             <Link to="/map" className="header-nav-link">Live Map</Link>
             <Link to="/fund-our-team" className="header-nav-link">Fund Our Team</Link>
             {/* <Link to="/leaderboard" className="header-nav-link">Leaderboard</Link> */}
+            <Link to={user ? '/account' : '/login'} className="header-nav-link">
+              {user ? user.full_name.split(' ')[0] || 'My Account' : 'Log In'}
+            </Link>
             <a href={DONATE_URL} onClick={e => { e.preventDefault(); openDonate(); }} className="header-nav-donate">♥ Donate</a>
           </nav>
           <div className="header-meta">
@@ -1133,6 +1138,9 @@ export default function DashboardPage() {
               LIVE
             </Link>
             <div className="last-update">Updated: {lastUpdate}</div>
+            <Link to={user ? '/account' : '/login'} className="header-nav-link header-meta-account">
+              {user ? user.full_name.split(' ')[0] || 'My Account' : 'Log In'}
+            </Link>
             <a href={DONATE_URL} onClick={e => { e.preventDefault(); openDonate(); }} className="header-meta-donate">♥ Donate</a>
           </div>
         </header>

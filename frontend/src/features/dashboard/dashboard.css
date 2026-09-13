@@ -111,9 +111,14 @@ header {
     transition: opacity 0.2s;
 }
 .header-nav-donate:hover { opacity: 0.85; }
+/* Duplicates the account/login link that lives in .header-nav — hidden by
+   default so it doesn't double up on desktop, shown only once .header-nav
+   itself is hidden below the 900px breakpoint. */
+.header-meta-account { display: none; }
 @media (max-width: 900px) {
     .header-nav          { display: none; }
     .header-meta-donate  { display: flex; }
+    .header-meta-account { display: inline-block; }
 }
 
 .map-link {
