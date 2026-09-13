@@ -15,6 +15,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from flask import session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
@@ -122,3 +123,26 @@ def authenticate(*, email: str, password: str) -> User:
     user.last_login_at = datetime.now(timezone.utc)
     db.session.commit()
     return user
+
+
+def current_user() -> User | None:
+    """The logged-in user for this request's session, or None. Shared by any
+    blueprint that needs to require login (not just app/features/auth)."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    user = db.session.get(User, user_id)
+    if user is None:
+        session.clear()
+    return user
+
+
+def serialize_user_summary(user: User) -> dict:
+    """The small, stable shape of a user returned to the frontend — never
+    the raw model (no password hash, no internal ids)."""
+    roles = [link.role.name for link in user.role_links if link.revoked_at is None]
+    return {
+        'email': user.email,
+        'full_name': user.full_name,
+        'roles': roles,
+    }

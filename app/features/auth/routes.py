@@ -4,9 +4,10 @@ from collections import defaultdict
 from flask import Blueprint, jsonify, redirect, request, session
 
 from app.config import PUBLIC_BASE_URL
-from app.extensions import db
 from app.features.incidents import email_service
-from app.services.auth_service import AuthError, authenticate, request_signup, verify_email
+from app.services.auth_service import (
+    AuthError, authenticate, current_user, request_signup, serialize_user_summary, verify_email,
+)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -28,15 +29,6 @@ def _rate_limited(bucket_store: dict, max_count: int, window: int) -> bool:
         bucket['window_start'] = now
     bucket['count'] += 1
     return bucket['count'] > max_count
-
-
-def _serialize_user(user) -> dict:
-    roles = [link.role.name for link in user.role_links if link.revoked_at is None]
-    return {
-        'email':     user.email,
-        'full_name': user.full_name,
-        'roles':     roles,
-    }
 
 
 @auth_bp.route('/api/auth/signup', methods=['POST'])
@@ -95,7 +87,7 @@ def login():
     session.clear()
     session['user_id'] = user.id
     session.permanent = True
-    return jsonify({'success': True, 'user': _serialize_user(user)}), 200
+    return jsonify({'success': True, 'user': serialize_user_summary(user)}), 200
 
 
 @auth_bp.route('/api/auth/logout', methods=['POST'])
@@ -106,14 +98,7 @@ def logout():
 
 @auth_bp.route('/api/auth/me')
 def me():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({'success': False}), 401
-
-    from app.models import User
-    user = db.session.get(User, user_id)
+    user = current_user()
     if user is None:
-        session.clear()
         return jsonify({'success': False}), 401
-
-    return jsonify({'success': True, 'user': _serialize_user(user)}), 200
+    return jsonify({'success': True, 'user': serialize_user_summary(user)}), 200

@@ -1,0 +1,321 @@
+/* ── Account dashboard: incidents, open-a-call, incident detail ──────────── */
+
+.account-page {
+  background: var(--bg-void);
+  min-height: 100vh;
+}
+
+.account-wrapper {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+.account-wrapper--narrow {
+  max-width: 520px;
+}
+
+.account-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0 32px;
+  border-bottom: 1px solid var(--border-dim);
+  margin-bottom: 32px;
+}
+
+.account-back {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  transition: color 0.15s;
+}
+.account-back:hover { color: var(--accent-teal); }
+
+.account-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.account-nav-brand-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  box-shadow: 0 0 8px var(--accent-teal);
+}
+
+.account-section {
+  margin-bottom: 32px;
+}
+
+.account-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.account-section-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-teal);
+}
+
+.account-open-call-btn {
+  padding: 8px 16px;
+  background: var(--accent-teal);
+  color: var(--bg-void);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.account-open-call-btn:hover { opacity: 0.9; }
+
+.account-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-mid);
+  border-radius: 12px;
+}
+
+.account-incident-card {
+  display: block;
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.account-incident-card:hover { border-color: var(--border-accent); background: var(--bg-card-hover); }
+
+.account-incident-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.account-incident-type {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.account-incident-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.account-incident-badge--ongoing { color: var(--accent-teal); background: var(--accent-teal-dim); }
+.account-incident-badge--past    { color: var(--text-muted); background: rgba(255,255,255,0.05); }
+.account-incident-badge--urgent  { color: var(--accent-red); background: var(--accent-red-dim); margin-left: 6px; }
+
+.account-incident-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.account-premium-card {
+  background: var(--accent-amber-dim);
+  border: 1px solid rgba(255, 185, 48, 0.3);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.account-premium-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-amber);
+  margin-bottom: 8px;
+}
+
+.account-premium-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-premium-list li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-left: 18px;
+  position: relative;
+}
+.account-premium-list li::before {
+  content: '★';
+  position: absolute;
+  left: 0;
+  color: var(--accent-amber);
+  font-size: 11px;
+}
+
+.account-premium-cta {
+  display: inline-block;
+  padding: 9px 18px;
+  background: var(--accent-amber);
+  color: var(--bg-void);
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.account-premium-cta:hover { opacity: 0.9; }
+
+/* ── Forms (Open a Call) ──────────────────────────────────────────────────── */
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.account-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.account-input,
+.account-select,
+.account-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.account-input:focus, .account-select:focus, .account-textarea:focus { border-color: var(--accent-teal); }
+.account-textarea { resize: vertical; min-height: 90px; font-family: var(--font-body); }
+
+.account-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.account-submit {
+  width: 100%;
+  padding: 13px;
+  background: var(--accent-teal);
+  color: var(--bg-void);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+.account-submit:hover:not(:disabled) { opacity: 0.9; }
+.account-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.account-error {
+  font-size: 12px;
+  color: var(--accent-red);
+  font-family: var(--font-mono);
+}
+
+/* ── Incident detail / task journey ───────────────────────────────────────── */
+
+.account-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.account-card--center { text-align: center; }
+
+.account-task-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+@media (min-width: 640px) {
+  .account-task-columns { grid-template-columns: 1fr 1fr; }
+}
+
+.account-task-col-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.account-task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-dim);
+}
+.account-task-item:last-child { border-bottom: none; }
+
+.account-task-check {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  margin-top: 1px;
+}
+.account-task-check--done    { background: var(--accent-teal-dim); color: var(--accent-teal); border: 1px solid var(--border-accent); }
+.account-task-check--pending { background: transparent; border: 1px solid var(--border-mid); }
+
+.account-task-title {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.account-task-title--done { color: var(--text-muted); text-decoration: line-through; }
+
+.account-task-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}

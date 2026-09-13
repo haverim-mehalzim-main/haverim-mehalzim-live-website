@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
-from app.features.incidents.service import fetch_monday_data
+from app.features.incidents.service import fetch_monday_data, create_incident, fetch_incidents_by_ids
 from app.features.incidents.tracker_service import fetch_case_status
 from app.features.incidents.donor_service import fetch_donor_by_token, is_valid_token_format, fetch_leaderboard
 from app.features.incidents.feedback_service import (
@@ -39,7 +39,12 @@ from app.features.incidents.constants import (
     PREMIUM_PRICE_USD,
     PREMIUM_PLAN_DEFAULT,
     USD_TO_ILS,
+    INCIDENT_TYPE_TRANSLATIONS,
 )
+from app.extensions import db
+from app.services.auth_service import current_user
+from app.services import incident_service
+from app.models import Incident, IncidentTask, IncidentTaskAssignee
 
 incidents_bp = Blueprint('incidents', __name__)
 
@@ -609,6 +614,235 @@ def tranzilla_notify():
         print(f'[notify] error recording order {payment.get("order_id")}: {ex}')
 
     return jsonify({'success': True}), 200
+
+
+# ── My incidents (account dashboard) ────────────────────────────────────────
+_open_call_rate: dict = defaultdict(lambda: {'count': 0, 'window_start': 0.0})
+_OPEN_CALL_RATE_MAX    = 10
+_OPEN_CALL_RATE_WINDOW = 60
+
+
+def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> dict:
+    """Merge the local ownership row with its live Monday.com fields. Monday
+    stays the source of truth for everything except who opened it and when —
+    `monday_row` can be None if the item was since deleted on Monday."""
+    row = monday_row or {}
+    hebrew_type = row.get('status_mkmb1zc6', '')
+    timeline = row.get('timeline_mkmbcabh', '') or ''
+    opened_date = timeline.split(' - ')[0].strip() if ' - ' in timeline else None
+    status_label = row.get('color_mkvvrm1r', '')
+
+    return {
+        'id': local_incident.id,
+        'monday_item_id': local_incident.monday_item_id,
+        'name': row.get('name', ''),
+        'incident_type': INCIDENT_TYPE_TRANSLATIONS.get(hebrew_type, hebrew_type),
+        'location': row.get('location_mkmbv7be', ''),
+        'country': row.get('country_mkmb91h3', ''),
+        'description': row.get('text_mm42945p', ''),
+        'life_threatening': bool(row.get('check_mkn3c7v8')),
+        'opened_date': opened_date,
+        'status_label': status_label,
+        'handled': status_label in HANDLED_STATUSES,
+        'found_on_monday': monday_row is not None,
+        'created_at': local_incident.created_at.isoformat(),
+    }
+
+
+def _serialize_task(task: IncidentTask) -> dict:
+    return {
+        'id': task.id,
+        'assignee': task.assignee.value,
+        'title': task.title,
+        'description': task.description,
+        'status': task.status.value,
+        'sort_order': task.sort_order,
+        'completed_at': task.completed_at.isoformat() if task.completed_at else None,
+    }
+
+
+@incidents_bp.route('/api/incident-types')
+def get_incident_types():
+    """English labels for the 'Open a Call' form dropdown — derived from the
+    same translation table used to display incidents, so the list can never
+    drift out of sync with what the backend actually accepts."""
+    return jsonify({'success': True, 'types': sorted(set(INCIDENT_TYPE_TRANSLATIONS.values()))}), 200
+
+
+@incidents_bp.route('/api/incidents', methods=['POST'])
+def open_incident():
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
+
+    from flask import request
+    ip  = request.remote_addr or 'unknown'
+    now = _time.time()
+    bucket = _open_call_rate[ip]
+    if now - bucket['window_start'] > _OPEN_CALL_RATE_WINDOW:
+        bucket['count'] = 0
+        bucket['window_start'] = now
+    bucket['count'] += 1
+    if bucket['count'] > _OPEN_CALL_RATE_MAX:
+        return jsonify({'success': False, 'message': 'Too many requests'}), 429
+
+    body = request.get_json(silent=True) or {}
+
+    incident_type = str(body.get('incident_type', '')).strip()
+    location      = str(body.get('location', '')).strip()[:2000]
+    description   = str(body.get('description', '')).strip()[:2000]
+    life_threatening = bool(body.get('life_threatening', False))
+
+    if incident_type not in INCIDENT_TYPE_TRANSLATIONS.values():
+        return jsonify({'success': False, 'message': 'Please choose a valid incident type.'}), 400
+    if not location:
+        return jsonify({'success': False, 'message': 'Please enter a location.'}), 400
+    if not description:
+        return jsonify({'success': False, 'message': 'Please describe what happened and what you need.'}), 400
+
+    monday_item_id = create_incident(
+        incident_type=incident_type,
+        location=location,
+        description=description,
+        life_threatening=life_threatening,
+        requester_name=user.full_name,
+    )
+    if monday_item_id is None:
+        return jsonify({'success': False, 'message': 'Could not open the call. Please try again shortly.'}), 502
+
+    incident = incident_service.create_incident_record(user_id=user.id, monday_item_id=monday_item_id)
+    db.session.commit()
+
+    return jsonify({'success': True, 'incident': {'id': incident.id, 'monday_item_id': monday_item_id}}), 200
+
+
+@incidents_bp.route('/api/my/incidents')
+def my_incidents():
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
+
+    local_incidents = incident_service.list_incidents_for_user(user.id)
+    monday_rows = {
+        row['id']: row
+        for row in fetch_incidents_by_ids([i.monday_item_id for i in local_incidents])
+    }
+
+    ongoing, past = [], []
+    for inc in local_incidents:
+        serialized = _serialize_incident(inc, monday_rows.get(inc.monday_item_id))
+        (past if serialized['handled'] else ongoing).append(serialized)
+
+    return jsonify({'success': True, 'ongoing': ongoing, 'past': past}), 200
+
+
+@incidents_bp.route('/api/my/incidents/<int:local_id>')
+def my_incident_detail(local_id):
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
+
+    incident = incident_service.get_owned_incident(local_id, user.id)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    monday_rows = fetch_incidents_by_ids([incident.monday_item_id])
+    monday_row = monday_rows[0] if monday_rows else None
+
+    tasks = incident_service.list_tasks(incident.id)
+    return jsonify({
+        'success': True,
+        'incident': _serialize_incident(incident, monday_row),
+        'tasks': [_serialize_task(t) for t in tasks],
+    }), 200
+
+
+# ── Admin: manage incident tasks ────────────────────────────────────────────
+
+@incidents_bp.route('/api/admin/incidents')
+def admin_list_incidents():
+    from flask import request
+    from app.config import ADMIN_TOKEN
+    if not _check_admin_token(request, ADMIN_TOKEN):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    local_incidents = Incident.query.order_by(Incident.created_at.desc()).all()
+    monday_rows = {
+        row['id']: row
+        for row in fetch_incidents_by_ids([i.monday_item_id for i in local_incidents])
+    }
+
+    result = []
+    for inc in local_incidents:
+        serialized = _serialize_incident(inc, monday_rows.get(inc.monday_item_id))
+        serialized['owner'] = {'email': inc.user.email, 'full_name': inc.user.full_name} if inc.user else None
+        result.append(serialized)
+
+    return jsonify({'success': True, 'incidents': result}), 200
+
+
+@incidents_bp.route('/api/admin/incidents/<int:local_id>/tasks', methods=['GET', 'POST'])
+def admin_incident_tasks(local_id):
+    from flask import request
+    from app.config import ADMIN_TOKEN
+    if not _check_admin_token(request, ADMIN_TOKEN):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    incident = db.session.get(Incident, local_id)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    if request.method == 'GET':
+        tasks = incident_service.list_tasks(incident.id)
+        return jsonify({'success': True, 'tasks': [_serialize_task(t) for t in tasks]}), 200
+
+    body = request.get_json(silent=True) or {}
+    title = str(body.get('title', '')).strip()[:300]
+    if not title:
+        return jsonify({'success': False, 'message': 'Title is required.'}), 400
+    try:
+        assignee = IncidentTaskAssignee(str(body.get('assignee', 'staff')))
+    except ValueError:
+        return jsonify({'success': False, 'message': 'assignee must be "user" or "staff".'}), 400
+
+    task = incident_service.create_task(
+        incident_id=incident.id,
+        assignee=assignee.value,
+        title=title,
+        description=str(body.get('description', '')).strip()[:2000] or None,
+        sort_order=int(body.get('sort_order', 0) or 0),
+    )
+    return jsonify({'success': True, 'task': _serialize_task(task)}), 200
+
+
+@incidents_bp.route('/api/admin/incidents/<int:local_id>/tasks/<int:task_id>', methods=['PATCH', 'DELETE'])
+def admin_incident_task_detail(local_id, task_id):
+    from flask import request
+    from app.config import ADMIN_TOKEN
+    if not _check_admin_token(request, ADMIN_TOKEN):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    task = db.session.get(IncidentTask, task_id)
+    if task is None or task.incident_id != local_id:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    if request.method == 'DELETE':
+        incident_service.delete_task(task)
+        return jsonify({'success': True}), 200
+
+    body = request.get_json(silent=True) or {}
+    try:
+        updated = incident_service.update_task(
+            task,
+            title=(str(body['title']).strip()[:300] if 'title' in body else None),
+            description=(str(body['description']).strip()[:2000] if 'description' in body else None),
+            status=body.get('status'),
+            sort_order=(int(body['sort_order']) if 'sort_order' in body else None),
+        )
+    except ValueError:
+        return jsonify({'success': False, 'message': 'status must be "pending" or "done".'}), 400
+
+    return jsonify({'success': True, 'task': _serialize_task(updated)}), 200
 
 
 @incidents_bp.route('/api/health')
