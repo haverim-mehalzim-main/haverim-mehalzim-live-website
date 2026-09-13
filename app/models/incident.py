@@ -29,6 +29,12 @@ class Incident(db.Model):
     id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     monday_item_id = db.Column(db.Text, nullable=False, unique=True)
+    # Monday's location column requires real lat/lng (address alone is
+    # rejected) — our minimal form only collects free text, no geocoding.
+    # Stored here so "my incidents" can show what the requester actually
+    # typed regardless of whether/when staff later plot it precisely on
+    # Monday's own location picker.
+    submitted_location = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
 
     user = db.relationship("User", back_populates="incidents")

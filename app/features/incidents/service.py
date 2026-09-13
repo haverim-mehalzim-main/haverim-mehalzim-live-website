@@ -4,7 +4,7 @@ from datetime import datetime
 
 import requests
 from app.config import BOARD_ID, MONDAY_URL, MONDAY_HEADERS
-from app.features.incidents.constants import GROUP_OPENED, INCIDENT_TYPE_TRANSLATIONS
+from app.features.incidents.constants import INCIDENT_TYPE_TRANSLATIONS, NEW_REQUEST_STATUS
 
 # Only the columns the app actually uses — avoids fetching stale / irrelevant data.
 _NEEDED_COLUMNS = [
@@ -97,11 +97,26 @@ def fetch_monday_data():
 # Same board, subset of _NEEDED_COLUMNS actually set on creation — staff still
 # gather everything else (victim details, insurance, citizenship, files)
 # through the existing full intake process; this just gets the case open and
-# visible (map, "my incidents", public tracker) in the right initial state.
-_STATUS_MAP_COL     = "status_mkmbjwef"   # map live/handled status
-_STATUS_HANDLED_COL = "color_mkvvrm1r"    # Hebrew "handled" status
+# visible (staff board, "my incidents", public tracker) in the right initial
+# state.
+#
+# Deliberately NOT set here:
+#   color_mkvvrm1r (Hebrew "handled" status) — an unreviewed, just-submitted
+#   incident must not count toward "handled" stats. Left at Monday's own
+#   default; staff set this themselves once they've actually reviewed it.
+#
+#   location_mkmbv7be — Monday's "location" column requires real lat/lng
+#   coordinates (a plain address is rejected outright); our minimal form only
+#   collects free text, no geocoding. The submitted text is folded into the
+#   description below instead, and kept verbatim in our own DB
+#   (Incident.submitted_location) for "my incidents" to display.
+#
+# status_mkmbjwef (map status) IS explicitly set — to NEW_REQUEST_STATUS, not
+# left at Monday's own column default. The board's default label ("Working
+# on it") is itself one of the live-map statuses, so leaving it unset would
+# have put an unreviewed incident straight onto the public map anyway.
+_STATUS_MAP_COL     = "status_mkmbjwef"
 _TYPE_COL           = "status_mkmb1zc6"   # incident type (Hebrew label)
-_LOCATION_COL       = "location_mkmbv7be"
 _LIFE_THREAT_COL    = "check_mkn3c7v8"
 _TIMELINE_COL       = "timeline_mkmbcabh"
 _TRACKER_STAGE_COL  = "color_mm32c8wh"    # public case-tracker stage
@@ -127,15 +142,14 @@ def create_incident(*, incident_type: str, location: str, description: str, life
 
     today = datetime.now().strftime("%Y-%m-%d")
     hebrew_type = _ENGLISH_TO_HEBREW_TYPE.get(incident_type, incident_type)
+    full_description = f"Location (as reported): {location}\n\n{description}"
 
     values: dict = {
-        _STATUS_MAP_COL:     {"label": "Live"},
-        _STATUS_HANDLED_COL: {"label": GROUP_OPENED},
+        _STATUS_MAP_COL:     {"label": NEW_REQUEST_STATUS},
         _TYPE_COL:           {"label": hebrew_type},
-        _LOCATION_COL:       location,
         _TIMELINE_COL:       {"from": today, "to": today},
         _TRACKER_STAGE_COL:  {"label": "Request Received"},
-        _DESCRIPTION_COL:    description,
+        _DESCRIPTION_COL:    full_description,
     }
     if life_threatening:
         values[_LIFE_THREAT_COL] = {"checked": "true"}

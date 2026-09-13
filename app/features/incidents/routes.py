@@ -637,7 +637,10 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         'monday_item_id': local_incident.monday_item_id,
         'name': row.get('name', ''),
         'incident_type': INCIDENT_TYPE_TRANSLATIONS.get(hebrew_type, hebrew_type),
-        'location': row.get('location_mkmbv7be', ''),
+        # Prefer what the requester actually typed (see Incident.submitted_location)
+        # over Monday's structured location column, which our minimal form never
+        # populates (it requires real lat/lng) but staff may fill in properly later.
+        'location': local_incident.submitted_location or row.get('location_mkmbv7be', ''),
         'country': row.get('country_mkmb91h3', ''),
         'description': row.get('text_mm42945p', ''),
         'life_threatening': bool(row.get('check_mkn3c7v8')),
@@ -710,7 +713,7 @@ def open_incident():
     if monday_item_id is None:
         return jsonify({'success': False, 'message': 'Could not open the call. Please try again shortly.'}), 502
 
-    incident = incident_service.create_incident_record(user_id=user.id, monday_item_id=monday_item_id)
+    incident = incident_service.create_incident_record(user_id=user.id, monday_item_id=monday_item_id, submitted_location=location)
     db.session.commit()
 
     return jsonify({'success': True, 'incident': {'id': incident.id, 'monday_item_id': monday_item_id}}), 200

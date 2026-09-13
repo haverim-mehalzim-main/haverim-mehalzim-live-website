@@ -6,6 +6,12 @@ SIGNIFICANT_INCIDENT = "אירוע משמעותי"
 MAP_LIVE_STATUSES     = {'Live', 'Active', 'Working on it'}
 MAP_HANDLED_STATUSES  = {'Done', 'Completed'}
 
+# status_mkmbjwef value set on a freshly self-service-opened incident (see
+# create_incident in service.py). Deliberately outside both sets above — an
+# unreviewed incident must not show on the live map or count as handled until
+# staff have actually looked at it and set a real status themselves.
+NEW_REQUEST_STATUS = "New Request by User"
+
 # status_mkmb1zc6 Hebrew → English translations
 INCIDENT_TYPE_TRANSLATIONS = {
     'רפואי':            'Medical',
