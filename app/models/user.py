@@ -47,6 +47,12 @@ class User(db.Model):
         server_default=UserStatus.ACTIVE.value,
     )
     email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Set on signup, cleared on successful verification. A password is stored
+    # immediately at signup time, but login is refused until email_verified_at
+    # is set — this is what stops someone from "claiming" an account using an
+    # email address they don't actually control (see auth_service.py).
+    email_verification_token = db.Column(db.Text, nullable=True, unique=True)
+    email_verification_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
     updated_at = db.Column(
         db.DateTime(timezone=True),

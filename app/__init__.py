@@ -1,4 +1,6 @@
 import os
+from datetime import timedelta
+
 from flask import Flask, request, redirect, send_from_directory
 from flask_cors import CORS
 
@@ -10,7 +12,7 @@ _DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
 # Path prefixes that must never be indexed by search engines. Kept out of
 # robots.txt on purpose — that file is public, so listing sensitive paths
 # there would advertise them. A noindex header protects without disclosing.
-_NOINDEX_PREFIXES = ('/admin/', '/my-impact/', '/track/', '/api/', '/donate/')
+_NOINDEX_PREFIXES = ('/admin/', '/my-impact/', '/track/', '/api/', '/donate/', '/account')
 
 
 def create_app():
@@ -22,11 +24,23 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db, directory=os.path.join(os.path.dirname(__file__), '..', 'migrations'))
 
+    # Session cookie (login state) — server-side session, same-origin since
+    # the SPA is served by this same Flask app. SECRET_KEY must be a fixed
+    # value in production (set FLASK_SECRET_KEY there); an ephemeral one here
+    # would log everyone out on every restart/deploy.
+    app.config['SECRET_KEY'] = config.SECRET_KEY
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+
     from app import models  # noqa: F401 — registers models on db.metadata before migrations run
 
     # API routes
     from app.features.incidents.routes import incidents_bp
+    from app.features.auth.routes import auth_bp
     app.register_blueprint(incidents_bp)
+    app.register_blueprint(auth_bp)
 
     # Tranzila POSTs the payment result back to the redirect URLs. The SPA
     # fallback below only serves GET, so a POST would 405. Bounce it to GET

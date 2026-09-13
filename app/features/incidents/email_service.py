@@ -57,6 +57,103 @@ def _first_name(name: str) -> str:
     return name.split()[0] if name else ""
 
 
+def send_verification_email(to_email: str, to_name: str, verify_url: str) -> bool:
+    """Send the "confirm your email" link required before a new account can
+    log in (see app/services/auth_service.py). Same best-effort contract as
+    send_donation_thankyou: never raises, returns True/False."""
+    if not is_configured():
+        print("[email_service] BREVO_API_KEY / sender / PUBLIC_BASE_URL not set — skipping verification email")
+        return False
+    if not to_email:
+        print("[email_service] no recipient email — skipping verification email")
+        return False
+
+    first_name = _first_name(to_name)
+    he_greeting = f"שלום {html.escape(first_name)}," if first_name else "שלום,"
+    en_greeting = f"Hi {html.escape(first_name)}," if first_name else "Hi there,"
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="he">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;
+                    font-family:'Segoe UI',Arial,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.06);">
+        <tr>
+          <td style="background:#0f172a;padding:26px 32px;text-align:center;">
+            <div style="color:#5eead4;font-size:13px;letter-spacing:2px;font-weight:700;">חברים מחלצים</div>
+            <div style="color:#e5e7eb;font-size:12px;margin-top:4px;">HAVERIM MEHALZIM</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;direction:rtl;text-align:right;">
+            <h1 style="margin:0 0 12px;font-size:20px;color:#0f172a;">אימות כתובת אימייל</h1>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">{he_greeting}</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">
+              כדי להפעיל את החשבון שלכם, יש לאשר את כתובת האימייל הזו. הקישור בתוקף ל-24 שעות.
+            </p>
+            <div style="text-align:center;">{_button(verify_url, "אימות כתובת האימייל שלי ←", True)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px 32px;direction:ltr;text-align:left;border-top:1px dashed #cbd5e1;">
+            <h1 style="margin:24px 0 12px;font-size:20px;color:#0f172a;">Confirm your email</h1>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">{en_greeting}</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">
+              To activate your account, please confirm this email address. This link expires in 24 hours.
+            </p>
+            <div style="text-align:center;">{_button(verify_url, "Confirm my email →", True)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:18px 32px;text-align:center;border-top:1px solid #eceff3;">
+            <div style="font-size:12px;color:#9ca3af;line-height:1.6;">
+              חברים מחלצים · Haverim Mehalzim<br>
+              אם לא ביקשתם זאת, ניתן להתעלם מהודעה זו · If you didn't request this, you can ignore this email.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    text_body = "\n".join([
+        he_greeting, "", "כדי להפעיל את החשבון שלכם, יש לאשר את כתובת האימייל שלכם (בתוקף ל-24 שעות):", verify_url,
+        "", "──────────  ENGLISH  ──────────", "",
+        en_greeting, "", "To activate your account, please confirm your email address (link expires in 24 hours):", verify_url,
+    ])
+
+    payload = {
+        "sender":      {"name": EMAIL_SENDER_NAME, "email": EMAIL_SENDER_ADDRESS},
+        "to":          [{"email": to_email, "name": (to_name or "").strip() or to_email}],
+        "replyTo":     {"email": EMAIL_REPLY_TO, "name": EMAIL_SENDER_NAME},
+        "subject":     "אימות כתובת אימייל | Confirm your email",
+        "htmlContent": html_body,
+        "textContent": text_body,
+        "tags":        ["email-verification"],
+    }
+    headers = {
+        "api-key":      BREVO_API_KEY,
+        "content-type": "application/json",
+        "accept":       "application/json",
+    }
+
+    try:
+        resp = requests.post(_BREVO_URL, json=payload, headers=headers, timeout=15)
+        if resp.status_code // 100 == 2:
+            print(f"[email_service] verification email sent to {to_email}")
+            return True
+        print(f"[email_service] Brevo error {resp.status_code}: {resp.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"[email_service] send failed: {e}")
+        return False
+
+
 def send_donation_thankyou(
     donor_name: str,
     donor_email: str,

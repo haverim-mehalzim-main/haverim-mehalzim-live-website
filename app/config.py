@@ -12,6 +12,19 @@ DONATIONS_BOARD_ID = os.getenv("DONATIONS_BOARD_ID")
 NEWSLETTER_BOARD_ID = os.getenv("NEWSLETTER_BOARD_ID")
 ADMIN_TOKEN       = os.getenv("ADMIN_TOKEN")
 
+# Signs the login session cookie (see app/features/auth). MUST be a fixed
+# value in production (set FLASK_SECRET_KEY on Railway) — falling back to a
+# random one here means every restart/deploy invalidates every logged-in
+# session. The random fallback exists only so local dev works without extra
+# setup; it deliberately prints a loud warning so it's never mistaken for a
+# real config in production.
+import secrets as _secrets
+SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
+if not SECRET_KEY:
+    SECRET_KEY = _secrets.token_hex(32)
+    print("[config] WARNING: FLASK_SECRET_KEY not set — using a random key for this "
+          "process only. Set FLASK_SECRET_KEY in production or every restart logs everyone out.")
+
 MONDAY_HEADERS = {
     "Authorization": API_KEY,
     "Content-Type": "application/json"
