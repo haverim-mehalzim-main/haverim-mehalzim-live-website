@@ -631,8 +631,11 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
     `monday_row` can be None if the item was since deleted on Monday."""
     row = monday_row or {}
     hebrew_type = row.get('status_mkmb1zc6', '')
-    timeline = row.get('timeline_mkmbcabh', '') or ''
-    opened_date = timeline.split(' - ')[0].strip() if ' - ' in timeline else None
+    # The requester's own submission time (Incident.created_at), not Monday's
+    # timeline_mkmbcabh — self-service creation deliberately leaves that unset
+    # (see create_incident); staff set it once the case is actually being
+    # worked, which is a different date than when it was opened.
+    opened_date = local_incident.created_at.date().isoformat()
     status_label = row.get('color_mkvvrm1r', '')
 
     hebrew_gender = row.get('color_mkngmw3', '')
