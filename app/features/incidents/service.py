@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from datetime import datetime
 
 import requests
@@ -118,16 +119,9 @@ def fetch_monday_data():
 #
 #   location_mkmbv7be — Monday's "location" column requires real lat/lng
 #   coordinates (a plain address is rejected outright); our minimal form only
-#   collects a free-text city, no geocoding. The submitted city is folded
-#   into the description below instead, and kept verbatim in our own DB
+#   collects a free-text city, no geocoding. Left alone — do not write to
+#   this column. The submitted city is kept verbatim in our own DB
 #   (Incident.submitted_location) for "my incidents" to display.
-#
-#   phone_mkz3dr0y (patient's phone, a structured "phone" column) — Monday
-#   validates this against a phone number + ISO-2 country code; our minimal
-#   form collects neither format nor country, so a raw digit string would be
-#   rejected the same way the location column was. The submitted number is
-#   folded into the description below instead, and kept verbatim in our own
-#   DB (Incident.submitted_patient_phone) for display.
 #
 #   check_mkn3c7v8 (life-threatening) — determined by staff after reviewing
 #   the case, not by whoever fills in the form. Left at Monday's own default.
@@ -143,12 +137,21 @@ def fetch_monday_data():
 # name (item title) is set to the patient/victim's name, matching the
 # convention already used by every existing item on this board — NOT the
 # filer's name (see _FILER_COL below for that).
+#
+# phone_mkz3dr0y (patient's phone, a structured "phone" column) IS set, using
+# the incident's own country as the phone's country code — but as a SEPARATE
+# best-effort mutation after create_item succeeds (see create_incident), not
+# in the same call as everything else. Monday validates this column against
+# a real number-format-per-country rule, so a value we can't fully control
+# (whatever digits the requester typed) could get rejected — that must never
+# take the rest of the incident down with it.
 _STATUS_MAP_COL     = "status_mkmbjwef"
 _TYPE_COL           = "status_mkmb1zc6"   # incident type (Hebrew label)
 _TRACKER_STAGE_COL  = "color_mm32c8wh"    # public case-tracker stage
 _DESCRIPTION_COL    = "long_text_mkpfvmh3"  # long_text: {"text": "..."} — NOT the plain-string "text" format
 _PATIENT_AGE_COL    = "numeric_mkng2emx"
 _PATIENT_GENDER_COL = "color_mkngmw3"
+_PATIENT_PHONE_COL  = "phone_mkz3dr0y"    # structured: {"phone": "<digits>", "countryShortName": "<ISO-2>"}
 _FILER_COL          = "text_mkz3yv22"     # free text: filer's name + phone
 _COUNTRY_COL        = "country_mkmb91h3"  # structured: {"countryCode", "countryName"}
 _MONTH_COL          = "color_mkmby5dg"    # status label "<Hebrew month> <year>"
@@ -189,12 +192,6 @@ def create_incident(
     month_label = f"{HEBREW_MONTHS[now.month]} {now.year}"
     country_name = COUNTRY_NAME_BY_CODE.get(country_code, country_code)
 
-    description_parts = [f"City (as reported): {city}"]
-    if patient_phone:
-        description_parts.append(f"Patient/missing person phone (as reported): {patient_phone}")
-    description_parts.append(description)
-    full_description = "\n\n".join(description_parts)
-
     filer_info = filer_name
     if filer_phone:
         filer_info = f"{filer_name} — {filer_phone}"
@@ -203,7 +200,7 @@ def create_incident(
         _STATUS_MAP_COL:     {"label": NEW_REQUEST_STATUS},
         _TYPE_COL:           {"label": hebrew_type},
         _TRACKER_STAGE_COL:  {"label": "Request Received"},
-        _DESCRIPTION_COL:    {"text": full_description},
+        _DESCRIPTION_COL:    {"text": description},
         _FILER_COL:          filer_info,
         _COUNTRY_COL:        {"countryCode": country_code, "countryName": country_name},
         _MONTH_COL:          {"label": month_label},
@@ -233,10 +230,46 @@ def create_incident(
         if "errors" in data:
             print(f"[service] Monday error creating incident: {data['errors']}")
             return None
-        return data["data"]["create_item"]["id"]
+        item_id = data["data"]["create_item"]["id"]
     except Exception as e:
         print(f"[service] Failed to create incident: {e}")
         return None
+
+    if patient_phone:
+        _set_patient_phone_best_effort(item_id, patient_phone, country_code)
+
+    return item_id
+
+
+def _set_patient_phone_best_effort(item_id: str, patient_phone: str, country_code: str) -> None:
+    """
+    Best-effort follow-up write of the patient's phone, kept separate from
+    create_item — Monday validates phone_mkz3dr0y against a real
+    number-format-per-country rule, so a value we don't fully control could
+    be rejected; that must never take the rest of the incident down with it
+    (the item already exists by the time this runs).
+    """
+    digits = re.sub(r"\D", "", patient_phone)
+    if not digits:
+        return
+
+    phone_values = _escape(json.dumps({_PATIENT_PHONE_COL: {"phone": digits, "countryShortName": country_code}}))
+    query = f"""
+      mutation {{
+        change_multiple_column_values(
+          item_id: {item_id},
+          board_id: {BOARD_ID},
+          column_values: "{phone_values}"
+        ) {{ id }}
+      }}
+    """
+    try:
+        resp = requests.post(MONDAY_URL, json={"query": query}, headers=MONDAY_HEADERS, timeout=15)
+        data = resp.json()
+        if "errors" in data:
+            print(f"[service] Monday error setting patient phone on {item_id}: {data['errors']}")
+    except Exception as e:
+        print(f"[service] Failed to set patient phone on {item_id}: {e}")
 
 
 def fetch_incidents_by_ids(monday_item_ids: list) -> list:

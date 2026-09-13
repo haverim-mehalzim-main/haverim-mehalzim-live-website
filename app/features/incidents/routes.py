@@ -663,13 +663,8 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         'country': row.get('country_mkmb91h3', ''),
         'location': ', '.join(p for p in [local_incident.submitted_location, row.get('country_mkmb91h3', '')] if p),
         # Prefer the requester's own untouched text (see
-        # Incident.submitted_description) over Monday's description column,
-        # which for a self-service incident holds the city/patient-phone
-        # folded in together (needed there since neither has a proper column
-        # to live in) — those are already shown separately elsewhere on this
-        # card, so repeating them here would just look like a garbled wall of
-        # text. Falls back to Monday's raw text for incidents opened any
-        # other way (no local row to prefer).
+        # Incident.submitted_description); falls back to Monday's raw column
+        # for incidents opened any other way (no local row to prefer).
         'description': local_incident.submitted_description or row.get('long_text_mkpfvmh3', ''),
         'life_threatening': bool(row.get('check_mkn3c7v8')),
         'opened_date': opened_date,
