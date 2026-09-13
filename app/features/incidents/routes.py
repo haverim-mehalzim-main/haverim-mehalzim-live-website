@@ -393,15 +393,17 @@ _DONATE_RATE_WINDOW = 60
 @incidents_bp.route('/api/payment-config')
 def payment_config():
     """
-    Public config the donate UI needs: the currencies a donor may choose and the
-    USD→ILS rate. Serving the rate from here (not hardcoding it in the bundle)
-    keeps the price the donor sees and the backend's threshold check on one rate.
+    Public config the donate/premium UI needs: the currencies a donor may
+    choose, the USD→ILS rate, and the premium price. Serving these from here
+    (not hardcoding in the bundle) keeps what the visitor sees and what the
+    backend actually charges/checks on one source of truth.
     """
-    from app.features.incidents.constants import USD_TO_ILS
+    from app.features.incidents.constants import USD_TO_ILS, PREMIUM_PRICE_USD
     resp = jsonify({
         'success': True,
         'currencies': SUPPORTED_CURRENCIES,
         'usd_to_ils': USD_TO_ILS,
+        'premium_price_usd': PREMIUM_PRICE_USD,
     })
     resp.headers['Cache-Control'] = 'public, max-age=3600'
     return resp, 200

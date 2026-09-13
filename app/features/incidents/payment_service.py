@@ -107,6 +107,10 @@ def build_payment_url(order: dict) -> str | None:
     if order.get("package_label"):
         pdesc = f"{pdesc} · {order['package_label']}"
 
+    # Same fix as pdesc above — a premium buyer must land on premium-specific
+    # copy, not "thank you for your donation".
+    result_prefix = "/premium" if order.get("purpose") == "premium_membership" else "/donate"
+
     params = {
         "sum":                 f"{float(order['amount']):.2f}",
         "currency":            order.get("currency") or TRANZILLA_CURRENCY,
@@ -115,8 +119,8 @@ def build_payment_url(order: dict) -> str | None:
         "contact":             order.get("donor_name", ""),
         "email":               order.get("donor_email", ""),
         "phone":               order.get("donor_phone", ""),
-        "success_url_address": f"{PUBLIC_BASE_URL}/donate/thanks",
-        "fail_url_address":    f"{PUBLIC_BASE_URL}/donate/failed",
+        "success_url_address": f"{PUBLIC_BASE_URL}{result_prefix}/thanks",
+        "fail_url_address":    f"{PUBLIC_BASE_URL}{result_prefix}/failed",
         "notify_url_address":  f"{PUBLIC_BASE_URL}/api/tranzilla/notify",
         # custom, echoed back to us verbatim on success + notify
         P_ORDER:    order["order_id"],

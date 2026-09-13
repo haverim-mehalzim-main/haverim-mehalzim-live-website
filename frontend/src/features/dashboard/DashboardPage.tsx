@@ -876,6 +876,12 @@ function PageNavCards() {
           <div className="page-nav-card-desc">Every response tier explained — what it costs, what it covers, and how to fund it</div>
           <div className="page-nav-card-cta">See Breakdown →</div>
         </Link>
+        <Link to="/premium" className="page-nav-card page-nav-card--gold">
+          <div className="page-nav-card-eyebrow">★ Premium</div>
+          <div className="page-nav-card-title">Premium Membership</div>
+          <div className="page-nav-card-desc">A one-time contribution for permanent priority status, starting with 24/7 availability</div>
+          <div className="page-nav-card-cta">Go Premium →</div>
+        </Link>
         {/* <Link to="/leaderboard" className="page-nav-card page-nav-card--gold">
           <div className="page-nav-card-eyebrow">★ Donors</div>
           <div className="page-nav-card-title">Donor Leaderboard</div>

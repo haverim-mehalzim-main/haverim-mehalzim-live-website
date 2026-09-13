@@ -42,6 +42,11 @@ export default function AccountPage() {
                 ))}
               </div>
             )}
+            {!user.roles.includes('premium') && (
+              <Link to="/premium" className="auth-premium-upsell">
+                ★ Go Premium — permanent priority status, starting with 24/7 availability
+              </Link>
+            )}
             <button className="auth-submit auth-submit--secondary" onClick={handleLogout}>
               Log Out
             </button>
