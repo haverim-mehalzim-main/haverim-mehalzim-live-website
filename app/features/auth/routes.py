@@ -47,7 +47,15 @@ def signup():
     except AuthError as e:
         return jsonify({'success': False, 'message': e.message}), e.status_code
 
+    # Threaded through to the verify redirect below — e.g. someone signing up
+    # from a case-share link should land back on that case once verified, not
+    # on the generic /account page. Same open-redirect guard as verify().
+    next_path = str(body.get('next', '') or '')
     verify_url = f"{PUBLIC_BASE_URL}/api/auth/verify/{token}"
+    if next_path.startswith('/') and not next_path.startswith('//'):
+        from urllib.parse import quote
+        verify_url += f"?next={quote(next_path, safe='')}"
+
     sent = email_service.send_verification_email(user.email, user.full_name, verify_url)
     if not sent:
         # The account exists but has no way to be activated — tell the truth
@@ -70,6 +78,10 @@ def verify(token):
     session.clear()
     session['user_id'] = user.id
     session.permanent = True
+
+    next_path = request.args.get('next', '') or ''
+    if next_path.startswith('/') and not next_path.startswith('//'):
+        return redirect(f"{PUBLIC_BASE_URL}{next_path}", code=302)
     return redirect(f"{PUBLIC_BASE_URL}/account?verified=1", code=302)
 
 

@@ -1,11 +1,16 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
 
 type Status = 'idle' | 'submitting' | 'sent' | 'error';
 
 export default function SignUpPage() {
+  const [searchParams] = useSearchParams();
+  // e.g. /signup?next=/join/<token> — carried through email verification so
+  // a brand-new family/friend account lands back on the shared case, not the
+  // generic account page, once they've confirmed their email.
+  const next = searchParams.get('next');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +25,7 @@ export default function SignUpPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, email, password }),
+        body: JSON.stringify({ full_name: fullName, email, password, next: next || undefined }),
       });
       const json = await res.json();
       if (json.success) {
@@ -104,7 +109,8 @@ export default function SignUpPage() {
               </button>
             </form>
             <div className="auth-switch">
-              Already have an account? <Link to="/login">Log in</Link>
+              Already have an account?{' '}
+              <Link to={next ? `/login?next=${encodeURIComponent(next)}` : '/login'}>Log in</Link>
             </div>
           </div>
         )}

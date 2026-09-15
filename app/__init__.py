@@ -12,7 +12,7 @@ _DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
 # Path prefixes that must never be indexed by search engines. Kept out of
 # robots.txt on purpose — that file is public, so listing sensitive paths
 # there would advertise them. A noindex header protects without disclosing.
-_NOINDEX_PREFIXES = ('/admin/', '/my-impact/', '/track/', '/api/', '/donate/', '/premium/', '/account')
+_NOINDEX_PREFIXES = ('/admin/', '/staff/', '/command', '/join/', '/my-impact/', '/track/', '/api/', '/donate/', '/premium/', '/account')
 
 
 def create_app():

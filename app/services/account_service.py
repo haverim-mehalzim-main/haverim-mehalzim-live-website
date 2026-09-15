@@ -78,6 +78,13 @@ def user_has_role(user: User | None, *role_names: str) -> bool:
     return not active.isdisjoint(role_names)
 
 
+def user_has_command_center_access(user: User | None) -> bool:
+    """True for admins, or volunteers who also hold premium membership —
+    the access shape for the elevated Command Center, distinct from the
+    incident-ops staff console every admin/volunteer can already reach."""
+    return user_has_role(user, "admin") or (user_has_role(user, "volunteer") and user_has_role(user, "premium"))
+
+
 def ensure_donor_account(
     *,
     name: str,

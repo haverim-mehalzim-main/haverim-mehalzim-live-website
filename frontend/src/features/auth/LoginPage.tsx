@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
@@ -7,6 +7,10 @@ import './auth.css';
 export default function LoginPage() {
   const { refresh } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // e.g. /login?next=/join/<token> — lets a share/invite link bounce someone
+  // through login and land back where they were headed, instead of /account.
+  const next = searchParams.get('next');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,7 +29,10 @@ export default function LoginPage() {
       const json = await res.json();
       if (json.success) {
         await refresh();
-        navigate('/account');
+        // Only ever navigate to a same-site path — never follow `next` if it
+        // looks like it could redirect off this site (open-redirect guard).
+        const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/account';
+        navigate(safeNext);
       } else {
         setError(json.message || 'Invalid email or password.');
       }
@@ -78,7 +85,8 @@ export default function LoginPage() {
             </button>
           </form>
           <div className="auth-switch">
-            Don&apos;t have an account? <Link to="/signup">Sign up</Link>
+            Don&apos;t have an account?{' '}
+            <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'}>Sign up</Link>
           </div>
         </div>
       </div>

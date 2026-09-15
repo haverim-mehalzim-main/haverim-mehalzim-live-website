@@ -7,17 +7,26 @@ interface IncidentDetail {
   id: number;
   incident_type: string;
   location: string;
-  description: string;
+  description?: string;
   life_threatening: boolean;
   opened_date: string | null;
-  status_label: string;
+  status_label?: string;
   handled: boolean;
-  found_on_monday: boolean;
+  found_on_monday?: boolean;
   patient_name: string;
-  patient_age: string;
-  patient_gender: string;
-  patient_phone: string;
-  filer_info: string;
+  patient_age?: string;
+  patient_gender?: string;
+  patient_phone?: string;
+  filer_info?: string;
+  // Only present for a follower (macro) view — the warm, step-based framing
+  // already used by the public case tracker, not a raw Monday status.
+  progress?: {
+    step: number;
+    step_title: string;
+    step_subtitle: string;
+    total_steps: number;
+    is_sensitive: boolean;
+  } | null;
 }
 
 interface Task {
@@ -29,6 +38,7 @@ interface Task {
 }
 
 type LoadState = 'loading' | 'not_found' | 'error' | 'ready';
+type Relation = 'owner' | 'follower';
 
 function TaskList({ title, tasks }: { title: string; tasks: Task[] }) {
   return (
@@ -53,12 +63,60 @@ function TaskList({ title, tasks }: { title: string; tasks: Task[] }) {
   );
 }
 
+function ShareCard({ incidentId }: { incidentId: number }) {
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const getLink = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/incidents/${incidentId}/share`, { method: 'POST' });
+      const json = await res.json();
+      if (json.success) setShareUrl(json.share_url);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = () => {
+    if (!shareUrl) return;
+    navigator.clipboard?.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="account-card">
+      <div className="account-section-title" style={{ marginBottom: 10 }}>◈ Share With Family &amp; Friends</div>
+      <p className="account-detail-desc-text" style={{ marginBottom: 14 }}>
+        Send this link to someone who wants to follow along. They&apos;ll be able to see how things
+        are going — no operational details, just the reassurance that this is being handled.
+      </p>
+      {shareUrl ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input className="account-input" readOnly value={shareUrl} style={{ flex: 1, minWidth: 200 }} onFocus={e => e.target.select()} />
+          <button className="account-submit" style={{ width: 'auto', padding: '10px 18px' }} onClick={copy}>
+            {copied ? '✓ Copied' : 'Copy Link'}
+          </button>
+        </div>
+      ) : (
+        <button className="account-submit" style={{ width: 'auto', padding: '10px 18px' }} onClick={getLink} disabled={busy}>
+          {busy ? 'Generating…' : '🔗 Get Share Link'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function IncidentDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>('loading');
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [relation, setRelation] = useState<Relation>('owner');
 
   useEffect(() => {
     if (authLoading) return;
@@ -75,6 +133,7 @@ export default function IncidentDetailPage() {
         if (!j.success) throw new Error('not_found');
         setIncident(j.incident);
         setTasks(j.tasks || []);
+        setRelation(j.relation === 'follower' ? 'follower' : 'owner');
         setState('ready');
       })
       .catch(e => setState(e.message === 'not_found' ? 'not_found' : 'error'));
@@ -107,6 +166,59 @@ export default function IncidentDetailPage() {
   }
 
   const inc = incident!;
+
+  // ── Follower (family/friend): macro-only, warm framing, no task list ──────
+  if (relation === 'follower') {
+    return (
+      <div className="account-page">
+        <div className="account-wrapper account-wrapper--narrow">
+          <nav className="account-nav">
+            <Link to="/account" className="account-back">← Back to My Account</Link>
+            <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
+          </nav>
+
+          <div className="account-card">
+            <div className="account-incident-top">
+              <div className="account-incident-type">{inc.patient_name || inc.incident_type || 'Case'}</div>
+              <span className={`account-incident-badge ${inc.handled ? 'account-incident-badge--past' : 'account-incident-badge--ongoing'}`}>
+                {inc.handled ? 'Resolved' : 'Ongoing'}
+              </span>
+            </div>
+            <div className="account-incident-meta" style={{ marginBottom: 20 }}>
+              {inc.location}{inc.opened_date ? ` · since ${inc.opened_date}` : ''}
+            </div>
+
+            {inc.progress && (
+              <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'var(--accent-teal-dim)', border: '1px solid var(--border-accent)',
+                  color: 'var(--accent-teal)', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
+                  marginBottom: 16,
+                }}>
+                  {inc.progress.step}/{inc.progress.total_steps}
+                </div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 6, color: 'var(--text-primary)' }}>
+                  {inc.progress.step_title}
+                </h2>
+                <p className="account-detail-desc-text" style={{ maxWidth: 340, margin: '0 auto' }}>
+                  {inc.progress.step_subtitle}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="account-card account-card--center" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            You&apos;re following this case as a family member or friend. The person who opened it
+            can see the full details and next steps.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Owner (the caller): full micro detail + task journey + share ──────────
   const userTasks  = tasks.filter(t => t.assignee === 'user');
   const staffTasks = tasks.filter(t => t.assignee === 'staff');
 
@@ -171,6 +283,8 @@ export default function IncidentDetailPage() {
             <TaskList title="What Haverim Mehalzim is doing" tasks={staffTasks} />
           </div>
         </div>
+
+        <ShareCard incidentId={inc.id} />
       </div>
     </div>
   );

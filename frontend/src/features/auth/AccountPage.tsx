@@ -11,6 +11,16 @@ interface IncidentSummary {
   opened_date: string | null;
   life_threatening: boolean;
   handled: boolean;
+  relation: 'owner' | 'follower';
+}
+
+interface DonationSummary {
+  order_id: string;
+  amount_usd: number;
+  currency: string;
+  confirmed_at: string | null;
+  monday_item_id: string | null;
+  progress: { step: number; step_title: string; step_subtitle: string; total_steps: number } | null;
 }
 
 function IncidentCard({ incident, ongoing }: { incident: IncidentSummary; ongoing: boolean }) {
@@ -23,12 +33,43 @@ function IncidentCard({ incident, ongoing }: { incident: IncidentSummary; ongoin
             {ongoing ? 'Ongoing' : 'Resolved'}
           </span>
           {incident.life_threatening && <span className="account-incident-badge account-incident-badge--urgent">Urgent</span>}
+          {incident.relation === 'follower' && (
+            <span className="account-incident-badge account-incident-badge--following">💙 Following</span>
+          )}
         </div>
       </div>
       <div className="account-incident-meta">
         {incident.location}{incident.opened_date ? ` · opened ${incident.opened_date}` : ''}
       </div>
     </Link>
+  );
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  family: 'Family/Friend',
+};
+
+function DonationCard({ donation }: { donation: DonationSummary }) {
+  const symbol = donation.currency === '1' ? '₪' : '$';
+  return (
+    <div className="account-incident-card" style={{ cursor: 'default' }}>
+      <div className="account-incident-top">
+        <div className="account-incident-type">{symbol}{donation.amount_usd.toLocaleString()} donated</div>
+        {donation.progress && (
+          <span className="account-incident-badge account-incident-badge--ongoing">
+            {donation.progress.step_title}
+          </span>
+        )}
+      </div>
+      <div className="account-incident-meta">
+        {donation.confirmed_at ? `Confirmed ${donation.confirmed_at.slice(0, 10)}` : ''}
+      </div>
+      {donation.progress && (
+        <div className="account-detail-desc-text" style={{ marginTop: 8 }}>
+          {donation.progress.step_subtitle}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -43,6 +84,14 @@ export default function AccountPage() {
   const [past, setPast] = useState<IncidentSummary[]>([]);
   const [incidentsLoaded, setIncidentsLoaded] = useState(false);
 
+  const [donations, setDonations] = useState<DonationSummary[]>([]);
+  const [donationsLoaded, setDonationsLoaded] = useState(false);
+
+  const isStaff = user?.roles.includes('admin') || user?.roles.includes('volunteer');
+  const isDonor = user?.roles.includes('donor');
+  const isAdmin = user?.roles.includes('admin') ?? false;
+  const hasCommandCenterAccess = isAdmin || (!!user?.roles.includes('volunteer') && !!user?.roles.includes('premium'));
+
   useEffect(() => {
     if (!user) return;
     fetch('/api/my/incidents')
@@ -56,6 +105,15 @@ export default function AccountPage() {
       .catch(() => {})
       .finally(() => setIncidentsLoaded(true));
   }, [user]);
+
+  useEffect(() => {
+    if (!isDonor) return;
+    fetch('/api/my/donations')
+      .then(r => r.json())
+      .then(j => { if (j.success) setDonations(j.donations || []); })
+      .catch(() => {})
+      .finally(() => setDonationsLoaded(true));
+  }, [isDonor]);
 
   const handleLogout = async () => {
     await logout();
@@ -87,7 +145,7 @@ export default function AccountPage() {
               {user.roles.length > 0 && (
                 <div className="auth-roles">
                   {user.roles.map(role => (
-                    <span key={role} className="auth-role-badge">{role}</span>
+                    <span key={role} className="auth-role-badge">{ROLE_LABELS[role] ?? role}</span>
                   ))}
                 </div>
               )}
@@ -95,6 +153,39 @@ export default function AccountPage() {
                 Log Out
               </button>
             </div>
+
+            {isStaff && (
+              <div className="account-section">
+                <Link to="/staff/incidents" className="account-staff-console-link">
+                  <span>◈ Staff Console — view and work incidents</span>
+                  <span>→</span>
+                </Link>
+              </div>
+            )}
+
+            {hasCommandCenterAccess && (
+              <div className="account-section">
+                <Link to="/command" className="account-staff-console-link">
+                  <span>◈ Command Center</span>
+                  <span>→</span>
+                </Link>
+              </div>
+            )}
+
+            {isDonor && (
+              <div className="account-section">
+                <div className="account-section-header">
+                  <div className="account-section-title">◈ Your Donations</div>
+                </div>
+                {!donationsLoaded ? (
+                  <div className="account-empty">Loading…</div>
+                ) : donations.length === 0 ? (
+                  <div className="account-empty">No donations recorded here yet.</div>
+                ) : (
+                  donations.map(d => <DonationCard key={d.order_id} donation={d} />)
+                )}
+              </div>
+            )}
 
             <div className="account-section">
               <div className="account-section-header">

@@ -130,9 +130,28 @@
   padding: 3px 10px;
   border-radius: 999px;
 }
-.account-incident-badge--ongoing { color: var(--accent-teal); background: var(--accent-teal-dim); }
-.account-incident-badge--past    { color: var(--text-muted); background: rgba(255,255,255,0.05); }
-.account-incident-badge--urgent  { color: var(--accent-red); background: var(--accent-red-dim); margin-left: 6px; }
+.account-incident-badge--ongoing   { color: var(--accent-teal); background: var(--accent-teal-dim); }
+.account-incident-badge--past      { color: var(--text-muted); background: rgba(255,255,255,0.05); }
+.account-incident-badge--urgent    { color: var(--accent-red); background: var(--accent-red-dim); margin-left: 6px; }
+.account-incident-badge--following { color: var(--accent-blue); background: var(--accent-blue-dim); margin-left: 6px; }
+
+.account-staff-console-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-accent);
+  border-radius: 12px;
+  color: var(--accent-teal);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.account-staff-console-link:hover { background: var(--bg-card-hover); }
 
 .account-incident-meta {
   font-family: var(--font-mono);
