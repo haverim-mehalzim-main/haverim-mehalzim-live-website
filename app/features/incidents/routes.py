@@ -48,7 +48,7 @@ from app.extensions import db
 from app.services.auth_service import current_user
 from app.services.account_service import user_has_role
 from app.services import incident_service
-from app.models import Incident, IncidentTask, IncidentTaskAssignee
+from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee
 
 incidents_bp = Blueprint('incidents', __name__)
 
@@ -848,14 +848,36 @@ def my_incidents():
     return jsonify({'success': True, 'ongoing': ongoing, 'past': past}), 200
 
 
-@incidents_bp.route('/api/my/incidents/<int:local_id>')
-def my_incident_detail(local_id):
+@incidents_bp.route('/api/incidents/<int:local_id>')
+def incident_detail(local_id):
+    """The one dedicated page for a single incident, shared by every kind of
+    viewer — what comes back scales with `relation`, not the URL:
+      owner    — the caller: full detail + editable task journey + share link
+      follower — family/friend: macro progress card only, no task list
+      admin / volunteer — staff: full detail + task journey (admin can also
+        add/edit/delete tasks; volunteer can only toggle status — enforced by
+        the existing /api/staff/incidents/<id>/tasks* endpoints, not here)
+    Precedence is personal relation to *this* incident first (owner/follower),
+    then role-based staff access — an admin who also happens to be this
+    incident's own caller sees their own-case view, not the ops view.
+    """
     user = current_user()
     if user is None:
         return jsonify({'success': False, 'message': 'Please log in first.'}), 401
 
-    incident, relation = incident_service.get_accessible_incident(local_id, user.id)
+    incident = db.session.get(Incident, local_id)
     if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    if incident.user_id == user.id:
+        relation = 'owner'
+    elif IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None:
+        relation = 'follower'
+    elif user_has_role(user, 'admin'):
+        relation = 'admin'
+    elif user_has_role(user, 'volunteer'):
+        relation = 'volunteer'
+    else:
         return jsonify({'success': False, 'message': 'Not found'}), 404
 
     monday_rows = fetch_incidents_by_ids([incident.monday_item_id])
@@ -871,6 +893,9 @@ def my_incident_detail(local_id):
             'incident': _to_macro_incident_view(serialized, incident.monday_item_id),
             'tasks': [],
         }), 200
+
+    if relation in ('admin', 'volunteer'):
+        serialized['owner'] = {'email': incident.user.email, 'full_name': incident.user.full_name} if incident.user else None
 
     tasks = incident_service.list_tasks(incident.id)
     return jsonify({

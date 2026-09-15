@@ -78,7 +78,7 @@ export default function OpenCallPage() {
       });
       const json = await res.json();
       if (json.success && json.incident) {
-        navigate(`/account/incidents/${json.incident.id}`);
+        navigate(`/incidents/${json.incident.id}`);
       } else {
         setError(json.message || 'Could not open the call. Please try again.');
         setBusy(false);

@@ -29,7 +29,7 @@ export default function JoinIncidentPage() {
           setState('error');
           return;
         }
-        navigate(`/account/incidents/${j.incident_id}`, { replace: true });
+        navigate(`/incidents/${j.incident_id}`, { replace: true });
       })
       .catch(() => {
         setError('Something went wrong. Please try again.');

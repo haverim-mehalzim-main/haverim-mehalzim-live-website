@@ -25,7 +25,7 @@ interface DonationSummary {
 
 function IncidentCard({ incident, ongoing }: { incident: IncidentSummary; ongoing: boolean }) {
   return (
-    <Link to={`/account/incidents/${incident.id}`} className="account-incident-card">
+    <Link to={`/incidents/${incident.id}`} className="account-incident-card">
       <div className="account-incident-top">
         <div className="account-incident-type">{incident.incident_type || 'Case'}</div>
         <div>

@@ -67,7 +67,7 @@ export default function App() {
         <Route path="/login"            element={<LoginPage />} />
         <Route path="/account"          element={<AccountPage />} />
         <Route path="/account/open-call" element={<OpenCallPage />} />
-        <Route path="/account/incidents/:id" element={<IncidentDetailPage />} />
+        <Route path="/incidents/:id"         element={<IncidentDetailPage />} />
         <Route path="/join/:token"           element={<JoinIncidentPage />} />
         {/* <Route path="/leaderboard"      element={<LeaderboardPage />} /> */}
       </Routes>

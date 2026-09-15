@@ -56,22 +56,6 @@ def get_owned_incident(local_id: int, user_id: int) -> Incident | None:
     return incident
 
 
-def get_accessible_incident(local_id: int, user_id: int) -> tuple[Incident | None, str | None]:
-    """Returns (incident, relation) where relation is 'owner' or 'follower' —
-    the caller (the actual person who opened it) or a family/friend who
-    joined via a share link — or (None, None) if this user has no access to
-    it at all. The relation tells the route how much detail to serialize."""
-    incident = db.session.get(Incident, local_id)
-    if incident is None:
-        return None, None
-    if incident.user_id == user_id:
-        return incident, 'owner'
-    is_follower = IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user_id).first() is not None
-    if is_follower:
-        return incident, 'follower'
-    return None, None
-
-
 def get_or_create_share_token(incident: Incident) -> str:
     """Lazily mint the link a caller shares with family/friends. Generated
     once and kept forever — most incidents are never shared, so there's no
