@@ -48,7 +48,7 @@ from app.extensions import db
 from app.services.auth_service import current_user
 from app.services.account_service import user_has_role
 from app.services import incident_service
-from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee
+from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
 
 incidents_bp = Blueprint('incidents', __name__)
 
@@ -709,6 +709,28 @@ def _to_macro_incident_view(serialized: dict, monday_item_id: str) -> dict:
     return macro
 
 
+# A volunteer who hasn't been approved to actively assist this specific
+# incident yet gets real operational context (what happened, patient
+# demographics) so they can decide whether to request to join — but not raw
+# contact info (phone, filer) or the task list, which stay behind that
+# approval. Allowlist, same reasoning as the macro view above.
+_VOLUNTEER_PREVIEW_FIELDS = _MACRO_INCIDENT_FIELDS | {
+    'description', 'patient_age', 'patient_gender', 'status_label', 'found_on_monday',
+}
+
+
+def _to_volunteer_preview_view(serialized: dict) -> dict:
+    return {k: v for k, v in serialized.items() if k in _VOLUNTEER_PREVIEW_FIELDS}
+
+
+def _serialize_volunteer_request(request: IncidentVolunteer) -> dict:
+    return {
+        'id': request.id,
+        'user': {'email': request.user.email, 'full_name': request.user.full_name} if request.user else None,
+        'requested_at': request.requested_at.isoformat(),
+    }
+
+
 def _staff_role_check(*, admin_only: bool = False):
     """Returns the current user if they're allowed to act on staff incident
     endpoints, else None. Volunteers can view and mark tasks done; only
@@ -718,6 +740,25 @@ def _staff_role_check(*, admin_only: bool = False):
         return None
     required = ('admin',) if admin_only else ('admin', 'volunteer')
     return user if user_has_role(user, *required) else None
+
+
+def _incident_staff_check(local_id: int, *, admin_only: bool = False):
+    """Like _staff_role_check, but for actions scoped to one incident: a
+    volunteer additionally has to be *approved to assist this specific
+    incident* (see incident_service.is_approved_volunteer), not just hold
+    the global role — that approval is the whole reason an unapproved
+    volunteer only gets a preview of the page instead of the task journey.
+    Admins are unrestricted, same as everywhere else."""
+    user = current_user()
+    if user is None:
+        return None
+    if user_has_role(user, 'admin'):
+        return user
+    if admin_only:
+        return None
+    if user_has_role(user, 'volunteer') and incident_service.is_approved_volunteer(local_id, user.id):
+        return user
+    return None
 
 
 @incidents_bp.route('/api/incident-types')
@@ -851,12 +892,17 @@ def my_incidents():
 @incidents_bp.route('/api/incidents/<int:local_id>')
 def incident_detail(local_id):
     """The one dedicated page for a single incident, shared by every kind of
-    viewer — what comes back scales with `relation`, not the URL:
+    viewer — what comes back scales with `relation` (and, for volunteers,
+    whether they've been approved to assist THIS incident), not the URL:
       owner    — the caller: full detail + editable task journey + share link
       follower — family/friend: macro progress card only, no task list
-      admin / volunteer — staff: full detail + task journey (admin can also
-        add/edit/delete tasks; volunteer can only toggle status — enforced by
-        the existing /api/staff/incidents/<id>/tasks* endpoints, not here)
+      admin    — full detail + task journey, can also add/edit/delete tasks
+                 and approve/deny volunteer join requests
+      volunteer, approved for this incident — same full detail + task
+                 journey as admin, but can only toggle task status
+      volunteer, not (yet) approved — a reduced preview (real operational
+                 context, no raw contact info, no task list) plus whether
+                 they've already asked to join
     Precedence is personal relation to *this* incident first (owner/follower),
     then role-based staff access — an admin who also happens to be this
     incident's own caller sees their own-case view, not the ops view.
@@ -894,15 +940,47 @@ def incident_detail(local_id):
             'tasks': [],
         }), 200
 
-    if relation in ('admin', 'volunteer'):
-        serialized['owner'] = {'email': incident.user.email, 'full_name': incident.user.full_name} if incident.user else None
+    if relation == 'owner':
+        tasks = incident_service.list_tasks(incident.id)
+        return jsonify({
+            'success': True,
+            'relation': relation,
+            'incident': serialized,
+            'tasks': [_serialize_task(t) for t in tasks],
+        }), 200
 
-    tasks = incident_service.list_tasks(incident.id)
+    serialized['owner'] = {'email': incident.user.email, 'full_name': incident.user.full_name} if incident.user else None
+
+    if relation == 'admin':
+        tasks = incident_service.list_tasks(incident.id)
+        pending = incident_service.list_volunteer_requests(incident.id)
+        return jsonify({
+            'success': True,
+            'relation': relation,
+            'incident': serialized,
+            'tasks': [_serialize_task(t) for t in tasks],
+            'volunteer_requests': [_serialize_volunteer_request(r) for r in pending],
+        }), 200
+
+    # relation == 'volunteer'
+    vol_request = incident_service.get_volunteer_request(incident.id, user.id)
+    if vol_request is not None and vol_request.approved_at is not None:
+        tasks = incident_service.list_tasks(incident.id)
+        return jsonify({
+            'success': True,
+            'relation': relation,
+            'joined': True,
+            'incident': serialized,
+            'tasks': [_serialize_task(t) for t in tasks],
+        }), 200
+
     return jsonify({
         'success': True,
         'relation': relation,
-        'incident': serialized,
-        'tasks': [_serialize_task(t) for t in tasks],
+        'joined': False,
+        'join_requested': vol_request is not None,
+        'incident': _to_volunteer_preview_view(serialized),
+        'tasks': [],
     }), 200
 
 
@@ -1002,22 +1080,13 @@ def staff_list_incidents():
     return jsonify({'success': True, 'incidents': result}), 200
 
 
-@incidents_bp.route('/api/staff/incidents/<int:local_id>/tasks', methods=['GET', 'POST'])
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/tasks', methods=['POST'])
 def staff_incident_tasks(local_id):
     from flask import request
 
-    if request.method == 'GET':
-        if _staff_role_check() is None:
-            return jsonify({'success': False, 'message': 'Forbidden'}), 403
-        incident = db.session.get(Incident, local_id)
-        if incident is None:
-            return jsonify({'success': False, 'message': 'Not found'}), 404
-        tasks = incident_service.list_tasks(incident.id)
-        return jsonify({'success': True, 'tasks': [_serialize_task(t) for t in tasks]}), 200
-
     # Creating a task is an admin-only action — volunteers can work the task
     # list an admin set up, not define it.
-    if _staff_role_check(admin_only=True) is None:
+    if _incident_staff_check(local_id, admin_only=True) is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     incident = db.session.get(Incident, local_id)
@@ -1049,7 +1118,7 @@ def staff_incident_task_detail(local_id, task_id):
 
     if request.method == 'DELETE':
         # Deleting a task is admin-only, same reasoning as creating one.
-        if _staff_role_check(admin_only=True) is None:
+        if _incident_staff_check(local_id, admin_only=True) is None:
             return jsonify({'success': False, 'message': 'Forbidden'}), 403
         task = db.session.get(IncidentTask, task_id)
         if task is None or task.incident_id != local_id:
@@ -1061,7 +1130,7 @@ def staff_incident_task_detail(local_id, task_id):
     # A volunteer may only toggle status (mark done/pending) — editing the
     # task's title/description/order is admin-only, same reasoning as above.
     only_status = set(body.keys()) <= {'status'}
-    if _staff_role_check(admin_only=not only_status) is None:
+    if _incident_staff_check(local_id, admin_only=not only_status) is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     task = db.session.get(IncidentTask, task_id)
@@ -1080,6 +1149,54 @@ def staff_incident_task_detail(local_id, task_id):
         return jsonify({'success': False, 'message': 'status must be "pending" or "done".'}), 400
 
     return jsonify({'success': True, 'task': _serialize_task(updated)}), 200
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/volunteer-request', methods=['POST'])
+def request_incident_volunteer(local_id):
+    """A volunteer asks to actively assist this incident — admin approval
+    is required (see approve/deny below) before it grants the fuller detail
+    view and task-status actions."""
+    if _staff_role_check() is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    incident = db.session.get(Incident, local_id)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    user = current_user()
+    request_row = incident_service.request_to_volunteer(incident=incident, user=user)
+    db.session.commit()
+    return jsonify({'success': True, 'approved': request_row.approved_at is not None}), 200
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/volunteers/<int:request_id>/approve', methods=['POST'])
+def approve_incident_volunteer(local_id, request_id):
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    request_row = db.session.get(IncidentVolunteer, request_id)
+    if request_row is None or request_row.incident_id != local_id:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    incident_service.approve_volunteer_request(request_row)
+    db.session.commit()
+    return jsonify({'success': True}), 200
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/volunteers/<int:request_id>', methods=['DELETE'])
+def deny_incident_volunteer(local_id, request_id):
+    """Deny a pending request, or revoke an already-approved volunteer —
+    both are just removing the row; nothing else distinguishes them."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    request_row = db.session.get(IncidentVolunteer, request_id)
+    if request_row is None or request_row.incident_id != local_id:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    db.session.delete(request_row)
+    db.session.commit()
+    return jsonify({'success': True}), 200
 
 
 @incidents_bp.route('/api/health')

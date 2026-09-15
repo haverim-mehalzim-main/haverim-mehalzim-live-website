@@ -39,6 +39,12 @@ interface Task {
   status: 'pending' | 'done';
 }
 
+interface VolunteerRequest {
+  id: number;
+  user: { email: string; full_name: string } | null;
+  requested_at: string;
+}
+
 type LoadState = 'loading' | 'not_found' | 'error' | 'ready';
 type Relation = 'owner' | 'follower' | 'admin' | 'volunteer';
 
@@ -223,6 +229,91 @@ function StaffTaskManager({ incidentId, tasks, canManage, onTasksChange }: {
   );
 }
 
+// ── Volunteer who hasn't been approved for this incident yet ────────────────
+function VolunteerJoinCard({ incidentId, alreadyRequested, onRequested }: {
+  incidentId: number; alreadyRequested: boolean; onRequested: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [requested, setRequested] = useState(alreadyRequested);
+
+  const request = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/staff/incidents/${incidentId}/volunteer-request`, { method: 'POST' });
+      const json = await res.json();
+      if (json.success) { setRequested(true); onRequested(); }
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="account-card account-card--center">
+      {requested ? (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>⏳ Your request to assist this case is waiting on admin approval.</p>
+      ) : (
+        <>
+          <p className="account-detail-desc-text" style={{ marginBottom: 14 }}>
+            Want to help with this case? Request to join — an admin needs to approve it before you can see full
+            contact details and work its task list.
+          </p>
+          <button className="account-submit" style={{ width: 'auto', padding: '10px 18px' }} onClick={request} disabled={busy}>
+            {busy ? 'Requesting…' : 'Request to Join'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Admin-only: approve or deny volunteers asking to join this incident ─────
+function VolunteerRequestsCard({ incidentId, requests, onChanged }: {
+  incidentId: number; requests: VolunteerRequest[]; onChanged: (requests: VolunteerRequest[]) => void;
+}) {
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const approve = async (reqId: number) => {
+    setBusyId(reqId);
+    try {
+      const res = await fetch(`/api/staff/incidents/${incidentId}/volunteers/${reqId}/approve`, { method: 'POST' });
+      if (res.ok) onChanged(requests.filter(r => r.id !== reqId));
+    } finally { setBusyId(null); }
+  };
+
+  const deny = async (reqId: number) => {
+    setBusyId(reqId);
+    try {
+      const res = await fetch(`/api/staff/incidents/${incidentId}/volunteers/${reqId}`, { method: 'DELETE' });
+      if (res.ok) onChanged(requests.filter(r => r.id !== reqId));
+    } finally { setBusyId(null); }
+  };
+
+  if (requests.length === 0) return null;
+
+  return (
+    <div className="account-card">
+      <div className="account-section-title" style={{ marginBottom: 14 }}>◈ Volunteers Requesting to Join ({requests.length})</div>
+      {requests.map(r => (
+        <div className="account-task-item" key={r.id}>
+          <div style={{ flex: 1 }}>
+            <div className="account-task-title">{r.user?.full_name || 'Unknown'}</div>
+            <div className="account-task-desc">{r.user?.email}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="account-submit" style={{ width: 'auto', padding: '6px 12px', fontSize: 11 }} onClick={() => approve(r.id)} disabled={busyId === r.id}>
+              Approve
+            </button>
+            <button
+              onClick={() => deny(r.id)} disabled={busyId === r.id}
+              style={{ background: 'none', border: '1px solid var(--border-mid)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, padding: '6px 12px' }}
+            >
+              Deny
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function IncidentDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
@@ -230,6 +321,11 @@ export default function IncidentDetailPage() {
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [relation, setRelation] = useState<Relation>('owner');
+  // Only meaningful for relation === 'volunteer' — owner/follower/admin
+  // default to `joined: true` so they never hit the not-yet-approved branch.
+  const [joined, setJoined] = useState(true);
+  const [joinRequested, setJoinRequested] = useState(false);
+  const [volunteerRequests, setVolunteerRequests] = useState<VolunteerRequest[]>([]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -247,6 +343,9 @@ export default function IncidentDetailPage() {
         setIncident(j.incident);
         setTasks(j.tasks || []);
         setRelation(j.relation);
+        setJoined(j.joined !== false);
+        setJoinRequested(!!j.join_requested);
+        setVolunteerRequests(j.volunteer_requests || []);
         setState('ready');
       })
       .catch(e => setState(e.message === 'not_found' ? 'not_found' : 'error'));
@@ -331,6 +430,56 @@ export default function IncidentDetailPage() {
     );
   }
 
+  // ── Volunteer, not (yet) approved for this incident: reduced preview ──────
+  if (relation === 'volunteer' && !joined) {
+    return (
+      <div className="account-page">
+        <div className="account-wrapper account-wrapper--narrow">
+          <nav className="account-nav">
+            <Link to="/staff/incidents" className="account-back">← Back to Staff Console</Link>
+            <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
+          </nav>
+
+          <div className="account-card">
+            <div className="account-incident-top">
+              <div className="account-incident-type">{inc.incident_type || 'Case'}</div>
+              <div>
+                <span className={`account-incident-badge ${inc.handled ? 'account-incident-badge--past' : 'account-incident-badge--ongoing'}`}>
+                  {inc.handled ? 'Resolved' : 'Ongoing'}
+                </span>
+                {inc.life_threatening && <span className="account-incident-badge account-incident-badge--urgent">Urgent</span>}
+              </div>
+            </div>
+            <div className="account-incident-meta" style={{ marginBottom: 14 }}>
+              {inc.location}{inc.opened_date ? ` · opened ${inc.opened_date}` : ''}
+              {inc.found_on_monday === false && <span style={{ color: 'var(--accent-amber)' }}> · ⚠ not found on Monday</span>}
+            </div>
+            {inc.description && (
+              <>
+                <div className="account-detail-desc-label">What happened</div>
+                <p className="account-detail-desc-text">{inc.description}</p>
+              </>
+            )}
+            {inc.patient_name && (
+              <div className="account-detail-grid">
+                <div>
+                  <div className="account-detail-item-label">Patient / missing person</div>
+                  <div className="account-detail-item-value">
+                    {inc.patient_name}
+                    {inc.patient_age ? `, age ${inc.patient_age}` : ''}
+                    {inc.patient_gender ? ` (${inc.patient_gender})` : ''}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <VolunteerJoinCard incidentId={inc.id} alreadyRequested={joinRequested} onRequested={() => setJoinRequested(true)} />
+        </div>
+      </div>
+    );
+  }
+
   const isStaffRelation = relation === 'admin' || relation === 'volunteer';
   const backLink = isStaffRelation ? '/staff/incidents' : '/account';
   const backLabel = isStaffRelation ? '← Back to Staff Console' : '← Back to My Account';
@@ -400,6 +549,10 @@ export default function IncidentDetailPage() {
             )}
           </div>
         </div>
+
+        {relation === 'admin' && (
+          <VolunteerRequestsCard incidentId={inc.id} requests={volunteerRequests} onChanged={setVolunteerRequests} />
+        )}
 
         {isStaffRelation ? (
           <StaffTaskManager

@@ -71,6 +71,7 @@ class User(db.Model):
     payments = db.relationship("Payment", back_populates="user")
     incidents = db.relationship("Incident", back_populates="user")
     followed_incidents = db.relationship("IncidentFollower", back_populates="user", cascade="all, delete-orphan")
+    incident_volunteer_requests = db.relationship("IncidentVolunteer", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User id={self.id} email={self.email!r}>"

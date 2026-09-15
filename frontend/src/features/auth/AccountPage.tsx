@@ -89,8 +89,6 @@ export default function AccountPage() {
 
   const isStaff = user?.roles.includes('admin') || user?.roles.includes('volunteer');
   const isDonor = user?.roles.includes('donor');
-  const isAdmin = user?.roles.includes('admin') ?? false;
-  const hasCommandCenterAccess = isAdmin || (!!user?.roles.includes('volunteer') && !!user?.roles.includes('premium'));
 
   useEffect(() => {
     if (!user) return;
@@ -158,15 +156,6 @@ export default function AccountPage() {
               <div className="account-section">
                 <Link to="/staff/incidents" className="account-staff-console-link">
                   <span>◈ Staff Console — view and work incidents</span>
-                  <span>→</span>
-                </Link>
-              </div>
-            )}
-
-            {hasCommandCenterAccess && (
-              <div className="account-section">
-                <Link to="/command" className="account-staff-console-link">
-                  <span>◈ Command Center</span>
                   <span>→</span>
                 </Link>
               </div>

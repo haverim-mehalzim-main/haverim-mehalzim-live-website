@@ -57,6 +57,7 @@ class Incident(db.Model):
     user = db.relationship("User", back_populates="incidents")
     tasks = db.relationship("IncidentTask", back_populates="incident", cascade="all, delete-orphan", order_by="IncidentTask.sort_order")
     followers = db.relationship("IncidentFollower", back_populates="incident", cascade="all, delete-orphan")
+    volunteer_requests = db.relationship("IncidentVolunteer", back_populates="incident", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Incident id={self.id} monday_item_id={self.monday_item_id!r}>"
@@ -123,3 +124,31 @@ class IncidentFollower(db.Model):
 
     def __repr__(self):
         return f"<IncidentFollower incident_id={self.incident_id} user_id={self.user_id}>"
+
+
+class IncidentVolunteer(db.Model):
+    """A volunteer who asked to actively assist a specific incident — distinct
+    from just holding the global 'volunteer' role, which only grants a
+    reduced preview of any incident's page. Needs admin approval before it
+    grants the fuller detail view and task-status actions: pending is
+    `approved_at is None`, the same two-step-claim pattern already used by
+    `User.email_verified_at`. Deny/revoke is just deleting the row — there's
+    no reason to keep a permanent record of a request nobody approved.
+    """
+
+    __tablename__ = "incident_volunteers"
+    __table_args__ = (
+        db.UniqueConstraint("incident_id", "user_id", name="uq_incident_volunteers_incident_user"),
+    )
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    incident_id = db.Column(db.BigInteger, db.ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    requested_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+    approved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    incident = db.relationship("Incident", back_populates="volunteer_requests")
+    user = db.relationship("User", back_populates="incident_volunteer_requests")
+
+    def __repr__(self):
+        return f"<IncidentVolunteer incident_id={self.incident_id} user_id={self.user_id} approved={self.approved_at is not None}>"

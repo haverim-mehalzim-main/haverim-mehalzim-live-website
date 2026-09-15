@@ -13,7 +13,7 @@ import secrets
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus
+from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer
 from app.services.account_service import grant_role
 
 
@@ -133,3 +133,37 @@ def update_task(task: IncidentTask, *, title: str | None = None, description: st
 def delete_task(task: IncidentTask) -> None:
     db.session.delete(task)
     db.session.commit()
+
+
+# ── Per-incident volunteer join requests ────────────────────────────────────
+# Holding the global 'volunteer' role only grants a reduced preview of any
+# incident's page — the fuller detail view and task-status actions require
+# actually being approved to assist THIS incident, tracked here.
+
+def get_volunteer_request(incident_id: int, user_id: int) -> IncidentVolunteer | None:
+    return IncidentVolunteer.query.filter_by(incident_id=incident_id, user_id=user_id).one_or_none()
+
+
+def is_approved_volunteer(incident_id: int, user_id: int) -> bool:
+    req = get_volunteer_request(incident_id, user_id)
+    return req is not None and req.approved_at is not None
+
+
+def request_to_volunteer(*, incident: Incident, user) -> IncidentVolunteer:
+    """A volunteer asks to actively assist this incident. Idempotent —
+    re-requesting just returns the existing (pending or already-approved)
+    row. Does not commit."""
+    existing = get_volunteer_request(incident.id, user.id)
+    if existing is not None:
+        return existing
+    request = IncidentVolunteer(incident_id=incident.id, user_id=user.id)
+    db.session.add(request)
+    return request
+
+
+def approve_volunteer_request(request: IncidentVolunteer) -> None:
+    request.approved_at = datetime.now(timezone.utc)
+
+
+def list_volunteer_requests(incident_id: int) -> list[IncidentVolunteer]:
+    return IncidentVolunteer.query.filter_by(incident_id=incident_id).order_by(IncidentVolunteer.requested_at).all()
