@@ -20,11 +20,8 @@ class PaymentStatus(str, enum.Enum):
 class Payment(db.Model):
     """Real order/transaction audit trail for a Tranzila checkout.
 
-    Only the premium-membership flow writes here today (see
-    app/services/premium_service.py) — the existing donation flow keeps its
-    established, stateless Monday.com-only path unchanged. `purpose` already
-    includes DONATION so that flow could move onto this same table later
-    without a schema redesign, not because it does yet.
+    Both the premium-membership and donation flows write here (see
+    app/services/premium_service.py and donation_service.py).
     """
 
     __tablename__ = "payments"
@@ -48,6 +45,11 @@ class Payment(db.Model):
     currency = db.Column(db.Text, nullable=False)
     amount_usd = db.Column(db.Numeric(12, 2), nullable=False)
     plan = db.Column(db.Text, nullable=True)
+    # For a donation: the Monday.com item id it was earmarked for (Tranzila's
+    # own "incident_id" custom param — misleadingly named, it's a Monday item
+    # id, not our local Incident.id). Not a FK: most donated-to incidents are
+    # staff-managed directly on Monday and never exist in our local table.
+    monday_item_id = db.Column(db.Text, nullable=True)
     confirmation_code = db.Column(db.Text, nullable=True)
     transaction_id = db.Column(db.Text, nullable=True)
     raw_notify_payload = db.Column(JSONB().with_variant(db.JSON, "sqlite"), nullable=True)

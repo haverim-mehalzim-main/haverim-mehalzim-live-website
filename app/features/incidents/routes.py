@@ -46,6 +46,7 @@ from app.features.incidents.constants import (
 )
 from app.extensions import db
 from app.services.auth_service import current_user
+from app.services.account_service import user_has_role
 from app.services import incident_service
 from app.models import Incident, IncidentTask, IncidentTaskAssignee
 
@@ -687,6 +688,38 @@ def _serialize_task(task: IncidentTask) -> dict:
     }
 
 
+# A family/friend follower gets the "is my loved one okay" picture, never the
+# operational detail (no raw phone numbers, no who-filed-this, no task list —
+# that's caller-only). Deliberately an allowlist, not a blocklist: a new field
+# added to _serialize_incident later is macro-hidden by default until someone
+# decides it belongs here, not silently exposed.
+_MACRO_INCIDENT_FIELDS = {
+    'id', 'monday_item_id', 'incident_type', 'city', 'country', 'location',
+    'patient_name', 'life_threatening', 'opened_date', 'handled', 'created_at',
+}
+
+
+def _to_macro_incident_view(serialized: dict, monday_item_id: str) -> dict:
+    macro = {k: v for k, v in serialized.items() if k in _MACRO_INCIDENT_FIELDS}
+    # The warm, step-based framing already built for the public case tracker —
+    # "We are with you", "Family Notified with Care" — is exactly the tone a
+    # family/friend view should have, not a clinical Monday status label.
+    status = fetch_case_status(monday_item_id)
+    macro['progress'] = status
+    return macro
+
+
+def _staff_role_check(*, admin_only: bool = False):
+    """Returns the current user if they're allowed to act on staff incident
+    endpoints, else None. Volunteers can view and mark tasks done; only
+    admins can create/delete tasks or edit their title/description."""
+    user = current_user()
+    if user is None:
+        return None
+    required = ('admin',) if admin_only else ('admin', 'volunteer')
+    return user if user_has_role(user, *required) else None
+
+
 @incidents_bp.route('/api/incident-types')
 def get_incident_types():
     """English labels for the 'Open a Call' form dropdown — derived from the
@@ -794,16 +827,23 @@ def my_incidents():
     if user is None:
         return jsonify({'success': False, 'message': 'Please log in first.'}), 401
 
-    local_incidents = incident_service.list_incidents_for_user(user.id)
+    owned = [(inc, 'owner') for inc in incident_service.list_incidents_for_user(user.id)]
+    followed = [(inc, 'follower') for inc in incident_service.list_followed_incidents(user.id)]
+    all_incidents = owned + followed
+
     monday_rows = {
         row['id']: row
-        for row in fetch_incidents_by_ids([i.monday_item_id for i in local_incidents])
+        for row in fetch_incidents_by_ids([inc.monday_item_id for inc, _ in all_incidents])
     }
 
     ongoing, past = [], []
-    for inc in local_incidents:
+    for inc, relation in all_incidents:
         serialized = _serialize_incident(inc, monday_rows.get(inc.monday_item_id))
-        (past if serialized['handled'] else ongoing).append(serialized)
+        if relation == 'follower':
+            serialized = _to_macro_incident_view(serialized, inc.monday_item_id)
+            serialized['handled'] = serialized.get('handled', False)
+        serialized['relation'] = relation
+        (past if serialized.get('handled') else ongoing).append(serialized)
 
     return jsonify({'success': True, 'ongoing': ongoing, 'past': past}), 200
 
@@ -814,28 +854,112 @@ def my_incident_detail(local_id):
     if user is None:
         return jsonify({'success': False, 'message': 'Please log in first.'}), 401
 
-    incident = incident_service.get_owned_incident(local_id, user.id)
+    incident, relation = incident_service.get_accessible_incident(local_id, user.id)
     if incident is None:
         return jsonify({'success': False, 'message': 'Not found'}), 404
 
     monday_rows = fetch_incidents_by_ids([incident.monday_item_id])
     monday_row = monday_rows[0] if monday_rows else None
+    serialized = _serialize_incident(incident, monday_row)
+
+    if relation == 'follower':
+        # Macro-only: no task list, no raw contact details — the warm
+        # progress framing instead of operational data.
+        return jsonify({
+            'success': True,
+            'relation': relation,
+            'incident': _to_macro_incident_view(serialized, incident.monday_item_id),
+            'tasks': [],
+        }), 200
 
     tasks = incident_service.list_tasks(incident.id)
     return jsonify({
         'success': True,
-        'incident': _serialize_incident(incident, monday_row),
+        'relation': relation,
+        'incident': serialized,
         'tasks': [_serialize_task(t) for t in tasks],
     }), 200
 
 
-# ── Admin: manage incident tasks ────────────────────────────────────────────
+@incidents_bp.route('/api/incidents/<int:local_id>/share', methods=['POST'])
+def share_incident(local_id):
+    """Owner-only: mint (or return the existing) share link for family/
+    friends to follow this incident at a macro level."""
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
 
-@incidents_bp.route('/api/admin/incidents')
-def admin_list_incidents():
-    from flask import request
-    from app.config import ADMIN_TOKEN
-    if not _check_admin_token(request, ADMIN_TOKEN):
+    incident = incident_service.get_owned_incident(local_id, user.id)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    token = incident_service.get_or_create_share_token(incident)
+    db.session.commit()
+
+    from app.config import PUBLIC_BASE_URL
+    return jsonify({'success': True, 'share_token': token, 'share_url': f'{PUBLIC_BASE_URL}/join/{token}'}), 200
+
+
+@incidents_bp.route('/api/incidents/join/<token>', methods=['POST'])
+def join_incident(token):
+    """A logged-in family/friend claims a share link. The owner visiting
+    their own share link is a no-op (they already have full access)."""
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
+
+    incident = incident_service.get_incident_by_share_token(token)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'This link is invalid or has expired.'}), 404
+
+    if incident.user_id == user.id:
+        return jsonify({'success': True, 'incident_id': incident.id, 'already_owner': True}), 200
+
+    incident_service.join_incident(incident=incident, user=user)
+    db.session.commit()
+    return jsonify({'success': True, 'incident_id': incident.id, 'already_owner': False}), 200
+
+
+@incidents_bp.route('/api/my/donations')
+def my_donations():
+    """Which incidents has this donor funded, and how is each one doing —
+    the local `payments` audit trail (see donation_service._record_donation_payment)
+    instead of a live Monday.com query per page load."""
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
+
+    from app.models import Payment, PaymentPurpose, PaymentStatus
+    donations = (
+        Payment.query
+        .filter_by(user_id=user.id, purpose=PaymentPurpose.DONATION, status=PaymentStatus.CONFIRMED)
+        .order_by(Payment.confirmed_at.desc())
+        .all()
+    )
+
+    result = []
+    for d in donations:
+        entry = {
+            'order_id': d.order_id,
+            'amount_usd': float(d.amount_usd),
+            'currency': d.currency,
+            'confirmed_at': d.confirmed_at.isoformat() if d.confirmed_at else None,
+            'monday_item_id': d.monday_item_id,
+            'progress': fetch_case_status(d.monday_item_id) if d.monday_item_id else None,
+        }
+        result.append(entry)
+
+    return jsonify({'success': True, 'donations': result}), 200
+
+
+# ── Staff (admin + volunteer): view and work incidents ─────────────────────
+# Real login/role auth, not the shared ADMIN_TOKEN the old /api/admin/feedback
+# endpoints still use — this surface is used by volunteer accounts too, not
+# just admins, so a shared secret token was never the right fit for it.
+
+@incidents_bp.route('/api/staff/incidents')
+def staff_list_incidents():
+    if _staff_role_check() is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     local_incidents = Incident.query.order_by(Incident.created_at.desc()).all()
@@ -853,20 +977,27 @@ def admin_list_incidents():
     return jsonify({'success': True, 'incidents': result}), 200
 
 
-@incidents_bp.route('/api/admin/incidents/<int:local_id>/tasks', methods=['GET', 'POST'])
-def admin_incident_tasks(local_id):
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/tasks', methods=['GET', 'POST'])
+def staff_incident_tasks(local_id):
     from flask import request
-    from app.config import ADMIN_TOKEN
-    if not _check_admin_token(request, ADMIN_TOKEN):
+
+    if request.method == 'GET':
+        if _staff_role_check() is None:
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
+        incident = db.session.get(Incident, local_id)
+        if incident is None:
+            return jsonify({'success': False, 'message': 'Not found'}), 404
+        tasks = incident_service.list_tasks(incident.id)
+        return jsonify({'success': True, 'tasks': [_serialize_task(t) for t in tasks]}), 200
+
+    # Creating a task is an admin-only action — volunteers can work the task
+    # list an admin set up, not define it.
+    if _staff_role_check(admin_only=True) is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     incident = db.session.get(Incident, local_id)
     if incident is None:
         return jsonify({'success': False, 'message': 'Not found'}), 404
-
-    if request.method == 'GET':
-        tasks = incident_service.list_tasks(incident.id)
-        return jsonify({'success': True, 'tasks': [_serialize_task(t) for t in tasks]}), 200
 
     body = request.get_json(silent=True) or {}
     title = str(body.get('title', '')).strip()[:300]
@@ -887,22 +1018,31 @@ def admin_incident_tasks(local_id):
     return jsonify({'success': True, 'task': _serialize_task(task)}), 200
 
 
-@incidents_bp.route('/api/admin/incidents/<int:local_id>/tasks/<int:task_id>', methods=['PATCH', 'DELETE'])
-def admin_incident_task_detail(local_id, task_id):
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/tasks/<int:task_id>', methods=['PATCH', 'DELETE'])
+def staff_incident_task_detail(local_id, task_id):
     from flask import request
-    from app.config import ADMIN_TOKEN
-    if not _check_admin_token(request, ADMIN_TOKEN):
+
+    if request.method == 'DELETE':
+        # Deleting a task is admin-only, same reasoning as creating one.
+        if _staff_role_check(admin_only=True) is None:
+            return jsonify({'success': False, 'message': 'Forbidden'}), 403
+        task = db.session.get(IncidentTask, task_id)
+        if task is None or task.incident_id != local_id:
+            return jsonify({'success': False, 'message': 'Not found'}), 404
+        incident_service.delete_task(task)
+        return jsonify({'success': True}), 200
+
+    body = request.get_json(silent=True) or {}
+    # A volunteer may only toggle status (mark done/pending) — editing the
+    # task's title/description/order is admin-only, same reasoning as above.
+    only_status = set(body.keys()) <= {'status'}
+    if _staff_role_check(admin_only=not only_status) is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     task = db.session.get(IncidentTask, task_id)
     if task is None or task.incident_id != local_id:
         return jsonify({'success': False, 'message': 'Not found'}), 404
 
-    if request.method == 'DELETE':
-        incident_service.delete_task(task)
-        return jsonify({'success': True}), 200
-
-    body = request.get_json(silent=True) or {}
     try:
         updated = incident_service.update_task(
             task,

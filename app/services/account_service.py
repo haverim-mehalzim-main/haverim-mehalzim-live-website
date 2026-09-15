@@ -68,6 +68,16 @@ def grant_role(user: User, role_name: str) -> None:
         link.granted_at = datetime.now(timezone.utc)
 
 
+def user_has_role(user: User | None, *role_names: str) -> bool:
+    """True if `user` currently holds any of `role_names` (revoked grants
+    don't count). Shared permission check for role-gated routes — e.g. an
+    endpoint open to both 'admin' and 'volunteer'."""
+    if user is None:
+        return False
+    active = {link.role.name for link in user.role_links if link.revoked_at is None}
+    return not active.isdisjoint(role_names)
+
+
 def ensure_donor_account(
     *,
     name: str,

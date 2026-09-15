@@ -427,10 +427,13 @@ def record_confirmed_payment(payment: dict, date_iso: str) -> dict:
         link_donation_to_donor(donor_id, donation_id)
 
     # Mirror into the local Postgres identity tables (implicit account
-    # creation). Best-effort: Monday.com above is still what donors actually
-    # see today, so a bug in this newer path must not break their donation.
+    # creation) and the payments audit table (so a donor can see, from our
+    # own dashboard, which incidents they funded — instead of live-querying
+    # Monday.com on every page load). Best-effort: Monday.com above is still
+    # what donors actually see today, so a bug in this newer path must not
+    # break their donation.
     try:
-        ensure_donor_account(
+        profile = ensure_donor_account(
             name=payment.get("donor_name", ""),
             email=payment.get("donor_email", ""),
             phone=payment.get("donor_phone", ""),
@@ -438,9 +441,45 @@ def record_confirmed_payment(payment: dict, date_iso: str) -> dict:
             impact_token=token,
             donation_date_iso=date_iso,
         )
+        if profile is not None:
+            _record_donation_payment(user=profile.user, payment=payment, amount_usd=amount_usd)
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         print(f"[donation_service] local account sync failed (non-fatal): {e}")
 
     return {"donor_id": donor_id, "donation_id": donation_id, "token": token, "duplicate": False}
+
+
+def _record_donation_payment(*, user, payment: dict, amount_usd: float) -> None:
+    """Mirror a confirmed donation into `payments` (purpose=donation) — the
+    same table premium already uses. `order_id` is unique at the DB level;
+    the check below is just a second line of defense on top of the
+    Monday-based dedup check above (belt and suspenders, not load-bearing)."""
+    from datetime import datetime, timezone
+
+    from app.models import Payment, PaymentPurpose, PaymentStatus
+    from app.services.money import to_decimal
+
+    order_id = payment.get("order_id", "")
+    if Payment.query.filter_by(order_id=order_id).first() is not None:
+        return
+
+    db.session.add(Payment(
+        order_id=order_id,
+        purpose=PaymentPurpose.DONATION,
+        status=PaymentStatus.CONFIRMED,
+        donor_name=payment.get("donor_name", "") or None,
+        donor_email=(payment.get("donor_email", "") or "").strip().lower() or None,
+        donor_phone=payment.get("donor_phone", "") or None,
+        amount=to_decimal(payment["amount"]),
+        currency=payment.get("currency", ""),
+        amount_usd=to_decimal(amount_usd),
+        plan=payment.get("package_id") or None,
+        monday_item_id=payment.get("incident_id") or None,
+        confirmation_code=payment.get("confirmation_code", ""),
+        transaction_id=payment.get("transaction_id", ""),
+        raw_notify_payload=payment,
+        user_id=user.id if user else None,
+        confirmed_at=datetime.now(timezone.utc),
+    ))

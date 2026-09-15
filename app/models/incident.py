@@ -48,10 +48,15 @@ class Incident(db.Model):
     # admin can show a clean description without duplicating the location
     # and patient-phone fields already shown elsewhere on the card.
     submitted_description = db.Column(db.Text, nullable=True)
+    # Generated lazily (see incident_service.get_or_create_share_token) the
+    # first time the owner asks to share this incident — most incidents are
+    # never shared, so there's no reason to mint a token at creation time.
+    share_token = db.Column(db.Text, nullable=True, unique=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
 
     user = db.relationship("User", back_populates="incidents")
     tasks = db.relationship("IncidentTask", back_populates="incident", cascade="all, delete-orphan", order_by="IncidentTask.sort_order")
+    followers = db.relationship("IncidentFollower", back_populates="incident", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Incident id={self.id} monday_item_id={self.monday_item_id!r}>"
@@ -90,3 +95,31 @@ class IncidentTask(db.Model):
 
     def __repr__(self):
         return f"<IncidentTask id={self.id} incident_id={self.incident_id} assignee={self.assignee} status={self.status}>"
+
+
+class IncidentFollower(db.Model):
+    """A logged-in user (family/friend) who joined an incident via the
+    owner's share link. Read-only, macro-level access only — see
+    incident_service for exactly what's hidden vs. shown vs. the owner.
+
+    Deliberately lean: joining only ever happens for an already-authenticated
+    user (see the join flow), so there's no "invited but hasn't signed up yet"
+    state to track here — no email, no separate invite token, no relationship
+    label. The share link itself lives on Incident.share_token.
+    """
+
+    __tablename__ = "incident_followers"
+    __table_args__ = (
+        db.UniqueConstraint("incident_id", "user_id", name="uq_incident_followers_incident_user"),
+    )
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    incident_id = db.Column(db.BigInteger, db.ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    joined_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+
+    incident = db.relationship("Incident", back_populates="followers")
+    user = db.relationship("User", back_populates="followed_incidents")
+
+    def __repr__(self):
+        return f"<IncidentFollower incident_id={self.incident_id} user_id={self.user_id}>"
