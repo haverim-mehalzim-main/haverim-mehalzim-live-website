@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
 
 export default function LoginPage() {
@@ -63,9 +64,8 @@ export default function LoginPage() {
             </label>
             <label className="auth-label">
               Password
-              <input
+              <PasswordInput
                 className="auth-input"
-                type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
 
 type Status = 'idle' | 'submitting' | 'sent' | 'error';
@@ -88,9 +89,8 @@ export default function SignUpPage() {
               </label>
               <label className="auth-label">
                 Password
-                <input
+                <PasswordInput
                   className="auth-input"
-                  type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
