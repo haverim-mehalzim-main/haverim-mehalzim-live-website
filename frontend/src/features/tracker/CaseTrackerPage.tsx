@@ -1,28 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDonate } from '../../context/DonateContext';
+import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState, type CaseStepDef } from '../../components/caseJourneySteps';
 import './tracker.css';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 
-interface StepDef { step: number; title: string; subtitle: string; icon: string; }
-
-const NORMAL_STEPS: StepDef[] = [
-  { step: 1, title: 'Request Received',              subtitle: 'We are with you.',                                                             icon: '◉' },
-  { step: 2, title: 'Situation Assessment',           subtitle: 'We are reviewing what happened and how urgent it is.',                         icon: '◈' },
-  { step: 3, title: 'Critical Information Verified',  subtitle: 'Identity, location, status, and contact details are being confirmed.',         icon: '✦' },
-  { step: 4, title: 'Case Officer Assigned',          subtitle: 'A dedicated person is managing the case.',                                     icon: '◎' },
-  { step: 5, title: 'Response Network Activated',     subtitle: 'The right people are being connected.',                                        icon: '⊕' },
-  { step: 6, title: 'Action Plan in Motion',          subtitle: 'The required steps are underway.',                                             icon: '▸' },
-  { step: 7, title: "Person's Status Verified",       subtitle: 'The family receives a clear and personal update.',                             icon: '◇' },
-  { step: 8, title: 'Support & Next Steps',           subtitle: 'We continue supporting the family through the next steps.',                    icon: '♡' },
-];
-
-const SENSITIVE_STEPS: StepDef[] = [
-  ...NORMAL_STEPS.slice(0, 6),
-  { step: 7, title: 'Family Notified with Care',    subtitle: 'The family has been updated personally and with care.',                          icon: '◇' },
-  { step: 8, title: 'Family Support & Next Steps',  subtitle: 'We continue supporting the family through the next steps.',                      icon: '♡' },
-];
+type StepDef = CaseStepDef;
+const NORMAL_STEPS = CASE_JOURNEY_STEPS;
+const SENSITIVE_STEPS = CASE_JOURNEY_STEPS_SENSITIVE;
 
 const DONATE_URL = 'https://www.jgive.com/new/en/usd/donation-targets/110214';
 
@@ -37,7 +23,6 @@ interface CaseData {
 }
 
 type LoadState  = 'loading' | 'not_found' | 'error' | 'ready';
-type StepState  = 'complete' | 'active' | 'upcoming';
 type FeedbackState = 'idle' | 'sending' | 'sent' | 'error';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -47,12 +32,6 @@ const RADIUS     = 55;
 const CIRC       = 2 * Math.PI * RADIUS;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function stepState(def: StepDef, current: number): StepState {
-  if (def.step < current)   return 'complete';
-  if (def.step === current) return 'active';
-  return 'upcoming';
-}
 
 function fmtCaseId(id: string): string {
   return `CASE-${id.slice(-7).toUpperCase()}`;
@@ -99,7 +78,7 @@ function RingProgress({ step, total, sensitive }: { step: number; total: number;
 // ─── Timeline step ────────────────────────────────────────────────────────────
 
 function TimelineStep({ def, current }: { def: StepDef; current: number }) {
-  const state = stepState(def, current);
+  const state = journeyStepState(def, current);
   return (
     <div className={`tracker-step ${state}`}>
       <div className="tracker-step-node">

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState } from '../../components/caseJourneySteps';
 import './account.css';
 
 interface IncidentDetail {
@@ -72,6 +73,62 @@ function TaskList({ title, tasks }: { title: string; tasks: Task[] }) {
   );
 }
 
+// ── Family/friend: the case journey as a ring + connected step timeline ─────
+const JOURNEY_RADIUS = 52;
+const JOURNEY_CIRC = 2 * Math.PI * JOURNEY_RADIUS;
+
+function FamilyJourneyCard({ progress }: {
+  progress: { step: number; step_title: string; step_subtitle: string; total_steps: number; is_sensitive: boolean };
+}) {
+  const steps = progress.is_sensitive ? CASE_JOURNEY_STEPS_SENSITIVE : CASE_JOURNEY_STEPS;
+  const current = Math.min(Math.max(progress.step, 1), progress.total_steps);
+  const offset = JOURNEY_CIRC * (1 - current / progress.total_steps);
+
+  return (
+    <div className={`account-journey${progress.is_sensitive ? ' sensitive' : ''}`}>
+      <div className="account-journey-ring-wrap">
+        <svg className="account-journey-ring-svg" viewBox="0 0 128 128">
+          <circle className="account-journey-ring-track" cx="64" cy="64" r={JOURNEY_RADIUS} />
+          <circle
+            className="account-journey-ring-fill"
+            cx="64" cy="64" r={JOURNEY_RADIUS}
+            strokeDasharray={JOURNEY_CIRC}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <div className="account-journey-ring-center">
+          <div className="account-journey-ring-num">{current}</div>
+          <div className="account-journey-ring-denom">of {progress.total_steps}</div>
+        </div>
+      </div>
+      <div className="account-journey-current-title">{progress.step_title}</div>
+      <p className="account-journey-current-subtitle">{progress.step_subtitle}</p>
+
+      <div className="account-journey-timeline">
+        {steps.map((s, idx) => {
+          const state = journeyStepState(s, current);
+          return (
+            <div key={s.step}>
+              {idx > 0 && <div className={`account-journey-connector ${s.step <= current ? 'filled' : 'empty'}`} />}
+              <div className={`account-journey-step ${state}`}>
+                <div className="account-journey-step-node">
+                  {state === 'complete' ? '✓' : state === 'active' ? s.icon : s.step}
+                </div>
+                <div className="account-journey-step-body">
+                  <div className="account-journey-step-title">{s.title}</div>
+                  <div className="account-journey-step-subtitle">{s.subtitle}</div>
+                  {state === 'active' && <span className="account-journey-step-pill">In Progress</span>}
+                  {state === 'complete' && <span className="account-journey-step-pill">Complete</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ShareCard({ incidentId }: { incidentId: number }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -136,7 +193,7 @@ function StaffTaskRow({ task, incidentId, canManage, onChanged, onDeleted }: {
       const json = await res.json();
       if (json.success) onChanged(json.task);
     } finally { setBusy(false); }
-  }, [task, incidentId]);
+  }, [task, incidentId, onChanged]);
 
   const remove = useCallback(async () => {
     setBusy(true);
@@ -144,14 +201,14 @@ function StaffTaskRow({ task, incidentId, canManage, onChanged, onDeleted }: {
       const res = await fetch(`/api/staff/incidents/${incidentId}/tasks/${task.id}`, { method: 'DELETE' });
       if (res.ok) onDeleted(task.id);
     } finally { setBusy(false); }
-  }, [task, incidentId]);
+  }, [task, incidentId, onDeleted]);
 
   return (
     <div className="account-task-item">
       <button
         onClick={toggleStatus} disabled={busy}
         className={`account-task-check ${task.status === 'done' ? 'account-task-check--done' : 'account-task-check--pending'}`}
-        style={{ border: 'none', cursor: 'pointer', padding: 0 }}
+        style={{ cursor: 'pointer', padding: 0 }}
       >
         {task.status === 'done' ? '✓' : ''}
       </button>
@@ -175,7 +232,7 @@ function StaffTaskRow({ task, incidentId, canManage, onChanged, onDeleted }: {
 }
 
 function StaffTaskManager({ incidentId, tasks, canManage, onTasksChange }: {
-  incidentId: number; tasks: Task[]; canManage: boolean; onTasksChange: (tasks: Task[]) => void;
+  incidentId: number; tasks: Task[]; canManage: boolean; onTasksChange: Dispatch<SetStateAction<Task[]>>;
 }) {
   const [assignee, setAssignee] = useState<'user' | 'staff'>('staff');
   const [title, setTitle] = useState('');
@@ -191,7 +248,10 @@ function StaffTaskManager({ incidentId, tasks, canManage, onTasksChange }: {
         body: JSON.stringify({ assignee, title: title.trim(), description: description.trim() || undefined, sort_order: tasks.length }),
       });
       const json = await res.json();
-      if (json.success) { onTasksChange([...tasks, json.task]); setTitle(''); setDescription(''); }
+      // Functional update: always applies on top of the latest state, not
+      // whatever `tasks` this closure happened to capture — see the same
+      // reasoning on onChanged/onDeleted below.
+      if (json.success) { onTasksChange(prev => [...prev, json.task]); setTitle(''); setDescription(''); }
     } finally { setAdding(false); }
   };
 
@@ -204,8 +264,11 @@ function StaffTaskManager({ incidentId, tasks, canManage, onTasksChange }: {
         tasks.map(t => (
           <StaffTaskRow
             key={t.id} task={t} incidentId={incidentId} canManage={canManage}
-            onChanged={updated => onTasksChange(tasks.map(x => x.id === updated.id ? updated : x))}
-            onDeleted={id => onTasksChange(tasks.filter(x => x.id !== id))}
+            // Functional updates so two rows resolving close together (or a
+            // row's handler firing from a stale render) can never clobber
+            // each other by writing back an outdated snapshot of the list.
+            onChanged={updated => onTasksChange(prev => prev.map(x => x.id === updated.id ? updated : x))}
+            onDeleted={id => onTasksChange(prev => prev.filter(x => x.id !== id))}
           />
         ))
       )}
@@ -405,30 +468,16 @@ export default function IncidentDetailPage() {
                 {inc.handled ? 'Resolved' : 'Ongoing'}
               </span>
             </div>
-            <div className="account-incident-meta" style={{ marginBottom: 20 }}>
+            <div className="account-incident-meta">
               {inc.location}{inc.opened_date ? ` · since ${inc.opened_date}` : ''}
             </div>
-
-            {inc.progress && (
-              <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 56, height: 56, borderRadius: '50%',
-                  background: 'var(--accent-teal-dim)', border: '1px solid var(--border-accent)',
-                  color: 'var(--accent-teal)', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
-                  marginBottom: 16,
-                }}>
-                  {inc.progress.step}/{inc.progress.total_steps}
-                </div>
-                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 6, color: 'var(--text-primary)' }}>
-                  {inc.progress.step_title}
-                </h2>
-                <p className="account-detail-desc-text" style={{ maxWidth: 340, margin: '0 auto' }}>
-                  {inc.progress.step_subtitle}
-                </p>
-              </div>
-            )}
           </div>
+
+          {inc.progress && (
+            <div className="account-card">
+              <FamilyJourneyCard progress={inc.progress} />
+            </div>
+          )}
 
           <div className="account-card account-card--center" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             You&apos;re following this case as a family member or friend. The person who opened it
