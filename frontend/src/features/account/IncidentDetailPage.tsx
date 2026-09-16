@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './account.css';
 
@@ -317,6 +317,14 @@ function VolunteerRequestsCard({ incidentId, requests, onChanged }: {
 export default function IncidentDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
+  // React Router doesn't remount this page when navigating to the same
+  // /incidents/:id it's already on (e.g. Staff Console → this incident →
+  // back → this incident again) — location.key changes on every navigation
+  // entry, even to an identical path, so it's what actually forces a refetch.
+  // Without it, a volunteer approved to join after their first (preview)
+  // visit would keep seeing that stale snapshot, tasks and all, until a
+  // hard reload.
+  const location = useLocation();
   const [state, setState] = useState<LoadState>('loading');
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -332,6 +340,7 @@ export default function IncidentDetailPage() {
     if (!user) { setState('not_found'); return; }
     if (!id) { setState('not_found'); return; }
 
+    setState('loading');
     fetch(`/api/incidents/${id}`)
       .then(r => {
         if (r.status === 404) throw new Error('not_found');
@@ -349,7 +358,7 @@ export default function IncidentDetailPage() {
         setState('ready');
       })
       .catch(e => setState(e.message === 'not_found' ? 'not_found' : 'error'));
-  }, [id, user, authLoading]);
+  }, [id, user, authLoading, location.key]);
 
   if (state === 'loading') {
     return (
