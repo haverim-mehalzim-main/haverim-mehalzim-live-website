@@ -12,6 +12,7 @@ interface IncidentDetail {
   life_threatening: boolean;
   opened_date: string | null;
   status_label?: string;
+  status_label_en?: string;
   handled: boolean;
   found_on_monday?: boolean;
   patient_name: string;
@@ -19,6 +20,9 @@ interface IncidentDetail {
   patient_gender?: string;
   patient_phone?: string;
   filer_info?: string;
+  city?: string;
+  country?: string;
+  country_code?: string;
   // Only present for admin/volunteer viewers — who opened this through the app.
   owner?: { email: string; full_name: string } | null;
   // Only present for a follower (macro) view — the warm, step-based framing
@@ -30,6 +34,34 @@ interface IncidentDetail {
     total_steps: number;
     is_sensitive: boolean;
   } | null;
+
+  // ── Extended case detail (admin dashboard + edit) ──────────────────────
+  incident_status_en?: string;
+  case_stage_en?: string;
+  insurance_en?: string;
+  combat_service_en?: string;
+  call_source_en?: string;
+  ccc_official_en?: string;
+  incident_manager_en?: string;
+  supervisor_en?: string;
+  in_request_at?: string;
+  closed_at?: string;
+  closure_summary?: string;
+  closure_lessons?: string;
+  closure_locating_point?: string;
+}
+
+interface IncidentFieldOptions {
+  statuses: string[];
+  incident_statuses: string[];
+  case_stages: string[];
+  genders: string[];
+  combat_services: string[];
+  insurances: string[];
+  call_sources: string[];
+  ccc_officials: string[];
+  incident_managers: string[];
+  supervisors: string[];
 }
 
 interface Task {
@@ -377,6 +409,340 @@ function VolunteerRequestsCard({ incidentId, requests, onChanged }: {
   );
 }
 
+// ── Admin-only: edit the incident's own details, written through to Monday ──
+interface CountryOption { code: string; name: string; }
+
+interface CaseEditForm {
+  incidentType: string;
+  statusLabel: string;
+  incidentStatus: string;
+  caseStage: string;
+  description: string;
+  countryCode: string;
+  city: string;
+  inRequestAt: string;
+  closedAt: string;
+  patientAge: string;
+  patientGender: string;
+  patientPhone: string;
+  callerInfo: string;
+  combatService: string;
+  insurance: string;
+  callSource: string;
+  cccOfficial: string;
+  incidentManager: string;
+  supervisor: string;
+  lifeThreatening: boolean;
+}
+
+function formFromIncident(incident: IncidentDetail): CaseEditForm {
+  return {
+    incidentType: incident.incident_type || '',
+    statusLabel: incident.status_label_en || '',
+    incidentStatus: incident.incident_status_en || '',
+    caseStage: incident.case_stage_en || '',
+    description: incident.description || '',
+    countryCode: incident.country_code || '',
+    city: incident.city || '',
+    inRequestAt: incident.in_request_at || '',
+    closedAt: incident.closed_at || '',
+    patientAge: incident.patient_age || '',
+    patientGender: incident.patient_gender || '',
+    patientPhone: incident.patient_phone || '',
+    callerInfo: incident.filer_info || '',
+    combatService: incident.combat_service_en || '',
+    insurance: incident.insurance_en || '',
+    callSource: incident.call_source_en || '',
+    cccOfficial: incident.ccc_official_en || '',
+    incidentManager: incident.incident_manager_en || '',
+    supervisor: incident.supervisor_en || '',
+    lifeThreatening: incident.life_threatening || false,
+  };
+}
+
+function FieldRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="account-field-row">
+      <span className="account-field-row-label">{label}</span>
+      <span className="account-field-row-value">{value}</span>
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[];
+}) {
+  return (
+    <label className="account-label">
+      {label}
+      <select className="account-select" value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">— Select —</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function TextField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <label className="account-label">
+      {label}
+      <input className="account-input" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+    </label>
+  );
+}
+
+function EditCaseCard({ incident, onSaved }: {
+  incident: IncidentDetail; onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [types, setTypes] = useState<string[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [options, setOptions] = useState<IncidentFieldOptions | null>(null);
+  const [form, setForm] = useState<CaseEditForm>(() => formFromIncident(incident));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [saved, setSaved] = useState(false);
+
+  const set = <K extends keyof CaseEditForm>(key: K, value: CaseEditForm[K]) =>
+    setForm(prev => ({ ...prev, [key]: value }));
+
+  useEffect(() => {
+    if (!editing) return;
+    setForm(formFromIncident(incident));
+    fetch('/api/incident-types').then(r => r.json()).then(j => { if (j.success) setTypes(j.types); });
+    fetch('/api/countries').then(r => r.json()).then(j => { if (j.success) setCountries(j.countries); });
+    fetch('/api/staff/incident-field-options').then(r => r.json()).then(j => { if (j.success) setOptions(j); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const body: Record<string, unknown> = {
+        description: form.description.trim(),
+        city: form.city.trim(),
+        in_request_at: form.inRequestAt.trim(),
+        closed_at: form.closedAt.trim(),
+        caller_info: form.callerInfo.trim(),
+        life_threatening: form.lifeThreatening,
+      };
+      // Dropdown fields: omit entirely when left at "— Select —" — an empty
+      // string isn't one of that field's real board labels, so sending it
+      // would fail validation instead of just meaning "leave unchanged".
+      const maybeLabel = (key: string, value: string) => { if (value) body[key] = value; };
+      maybeLabel('incident_type', form.incidentType);
+      maybeLabel('status_label', form.statusLabel);
+      maybeLabel('incident_status', form.incidentStatus);
+      maybeLabel('case_stage', form.caseStage);
+      maybeLabel('patient_gender', form.patientGender);
+      maybeLabel('combat_service', form.combatService);
+      maybeLabel('insurance', form.insurance);
+      maybeLabel('call_source', form.callSource);
+      maybeLabel('ccc_official', form.cccOfficial);
+      maybeLabel('incident_manager', form.incidentManager);
+      maybeLabel('supervisor', form.supervisor);
+      if (form.countryCode) body.country_code = form.countryCode;
+      if (form.patientAge.trim()) body.patient_age = Number(form.patientAge);
+      if (form.patientPhone.trim()) body.patient_phone = form.patientPhone.trim();
+
+      const res = await fetch(`/api/staff/incidents/${incident.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (json.success) {
+        onSaved();
+        setWarnings(json.warnings || []);
+        setSaved(true);
+        setEditing(false);
+      } else {
+        setError(json.message || 'Could not save changes.');
+      }
+    } catch {
+      setError('Network error.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="account-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div className="account-section-title">◈ Case Details</div>
+          <button
+            className="account-submit" style={{ width: 'auto', padding: '6px 14px', fontSize: 11 }}
+            onClick={() => { setEditing(true); setSaved(false); }}
+          >
+            ✎ Edit
+          </button>
+        </div>
+        {saved && <p style={{ fontSize: 12, color: 'var(--accent-teal)', marginBottom: 12 }}>✓ Saved to Monday.com.</p>}
+        {warnings.length > 0 && warnings.map((w, i) => (
+          <p key={i} style={{ fontSize: 12, color: 'var(--accent-amber)', marginBottom: 12 }}>⚠ {w}</p>
+        ))}
+
+        <div className="account-field-groups">
+          <div className="account-field-group-title">Classification</div>
+          <div className="account-field-group-title">Location &amp; Timeline</div>
+          <div>
+            <FieldRow label="Incident status" value={incident.incident_status_en} />
+            <FieldRow label="Case stage" value={incident.case_stage_en} />
+            <FieldRow label="Combat service" value={incident.combat_service_en} />
+            <FieldRow label="Referral source" value={incident.call_source_en} />
+          </div>
+          <div>
+            <FieldRow label="Country" value={incident.country} />
+            <FieldRow label="City / area" value={incident.city} />
+            <FieldRow label="Requested" value={incident.in_request_at} />
+            <FieldRow label="Closed" value={incident.closed_at} />
+          </div>
+
+          <div className="account-field-group-title">Team</div>
+          <div className="account-field-group-title">Contacts &amp; Insurance</div>
+          <div>
+            <FieldRow label="CCC Official" value={incident.ccc_official_en} />
+            <FieldRow label="Incident Manager" value={incident.incident_manager_en} />
+            <FieldRow label="Supervisor" value={incident.supervisor_en} />
+          </div>
+          <div>
+            <FieldRow label="Caller" value={incident.filer_info} />
+            <FieldRow label="Insurance" value={incident.insurance_en} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="account-card">
+      <div className="account-section-title" style={{ marginBottom: 4 }}>◈ Edit Case Details</div>
+      <div className="account-form">
+        <div className="account-form-section-title">Classification</div>
+        <SelectField label="Incident type" value={form.incidentType} onChange={v => set('incidentType', v)} options={types} />
+        <SelectField label="Status (internal)" value={form.statusLabel} onChange={v => set('statusLabel', v)} options={options?.statuses ?? []} />
+        <SelectField label="Incident status" value={form.incidentStatus} onChange={v => set('incidentStatus', v)} options={options?.incident_statuses ?? []} />
+        <SelectField label="Case stage" value={form.caseStage} onChange={v => set('caseStage', v)} options={options?.case_stages ?? []} />
+        <SelectField label="Combat service" value={form.combatService} onChange={v => set('combatService', v)} options={options?.combat_services ?? []} />
+        <SelectField label="How did we receive the call" value={form.callSource} onChange={v => set('callSource', v)} options={options?.call_sources ?? []} />
+        <div className="account-checkbox-row">
+          <input type="checkbox" checked={form.lifeThreatening} onChange={e => set('lifeThreatening', e.target.checked)} />
+          Life-threatening
+        </div>
+        <label className="account-label">
+          What happened
+          <textarea className="account-textarea" value={form.description} onChange={e => set('description', e.target.value)} rows={4} />
+        </label>
+
+        <div className="account-form-section-title">Location &amp; Timeline</div>
+        <label className="account-label">
+          Country
+          <select className="account-select" value={form.countryCode} onChange={e => set('countryCode', e.target.value)}>
+            <option value="">— Select —</option>
+            {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+          </select>
+        </label>
+        <TextField label="City / area" value={form.city} onChange={v => set('city', v)} placeholder="e.g. Netanya (country is separate, below)" />
+        <TextField label="Date/time request received" value={form.inRequestAt} onChange={v => set('inRequestAt', v)} placeholder="e.g. 2026-09-21 14:32" />
+        <TextField label="Date/time case closed" value={form.closedAt} onChange={v => set('closedAt', v)} placeholder="e.g. 2026-09-22 09:00" />
+
+        <div className="account-form-section-title">Patient / Contacts</div>
+        <TextField label="Patient age" value={form.patientAge} onChange={v => set('patientAge', v.replace(/\D/g, ''))} />
+        <SelectField label="Patient gender" value={form.patientGender} onChange={v => set('patientGender', v)} options={options?.genders ?? []} />
+        <TextField label="Patient phone" value={form.patientPhone} onChange={v => set('patientPhone', v)} />
+        <TextField label="Caller name &amp; phone" value={form.callerInfo} onChange={v => set('callerInfo', v)} />
+        <SelectField label="Insurance" value={form.insurance} onChange={v => set('insurance', v)} options={options?.insurances ?? []} />
+
+        <div className="account-form-section-title">Team</div>
+        <SelectField label="CCC Official" value={form.cccOfficial} onChange={v => set('cccOfficial', v)} options={options?.ccc_officials ?? []} />
+        <SelectField label="Incident Manager" value={form.incidentManager} onChange={v => set('incidentManager', v)} options={options?.incident_managers ?? []} />
+        <SelectField label="Supervisor" value={form.supervisor} onChange={v => set('supervisor', v)} options={options?.supervisors ?? []} />
+
+        {error && <div className="account-error">{error}</div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="account-submit" onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save to Monday.com'}
+          </button>
+          <button
+            onClick={() => setEditing(false)} disabled={saving}
+            style={{ background: 'none', border: '1px solid var(--border-mid)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', padding: '0 18px', fontSize: 13 }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin-only: shown once the incident's workflow status is "Done" —────────
+function CaseClosureCard({ incident, onSaved }: { incident: IncidentDetail; onSaved: () => void }) {
+  const [summary, setSummary] = useState(incident.closure_summary || '');
+  const [lessons, setLessons] = useState(incident.closure_lessons || '');
+  const [locatingPoint, setLocatingPoint] = useState(incident.closure_locating_point || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    setSaved(false);
+    try {
+      const res = await fetch(`/api/staff/incidents/${incident.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          closure_summary: summary.trim(),
+          closure_lessons: lessons.trim(),
+          closure_locating_point: locatingPoint.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        onSaved();
+        setSaved(true);
+      } else {
+        setError(json.message || 'Could not save changes.');
+      }
+    } catch {
+      setError('Network error.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="account-card">
+      <div className="account-section-title" style={{ marginBottom: 4 }}>◈ Case Closure</div>
+      <p className="account-detail-desc-text" style={{ marginBottom: 14 }}>
+        This case is marked Done — wrap it up for the record.
+      </p>
+      <div className="account-form">
+        <label className="account-label">
+          Summary of how we assisted
+          <textarea className="account-textarea" value={summary} onChange={e => setSummary(e.target.value)} rows={3} />
+        </label>
+        <label className="account-label">
+          Key lessons
+          <textarea className="account-textarea" value={lessons} onChange={e => setLessons(e.target.value)} rows={3} />
+        </label>
+        <TextField label="Point of locating (if relevant)" value={locatingPoint} onChange={setLocatingPoint} />
+        {error && <div className="account-error">{error}</div>}
+        {saved && <p style={{ fontSize: 12, color: 'var(--accent-teal)' }}>✓ Saved to Monday.com.</p>}
+        <button className="account-submit" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function IncidentDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
@@ -398,12 +764,9 @@ export default function IncidentDetailPage() {
   const [joinRequested, setJoinRequested] = useState(false);
   const [volunteerRequests, setVolunteerRequests] = useState<VolunteerRequest[]>([]);
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) { setState('not_found'); return; }
-    if (!id) { setState('not_found'); return; }
-
-    setState('loading');
+  const loadIncident = useCallback((opts?: { silent?: boolean }) => {
+    if (!id) return;
+    if (!opts?.silent) setState('loading');
     fetch(`/api/incidents/${id}`)
       .then(r => {
         if (r.status === 404) throw new Error('not_found');
@@ -421,6 +784,14 @@ export default function IncidentDetailPage() {
         setState('ready');
       })
       .catch(e => setState(e.message === 'not_found' ? 'not_found' : 'error'));
+  }, [id]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { setState('not_found'); return; }
+    if (!id) { setState('not_found'); return; }
+    loadIncident();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user, authLoading, location.key]);
 
   if (state === 'loading') {
@@ -607,6 +978,14 @@ export default function IncidentDetailPage() {
             )}
           </div>
         </div>
+
+        {relation === 'admin' && (
+          <EditCaseCard incident={inc} onSaved={() => loadIncident({ silent: true })} />
+        )}
+
+        {relation === 'admin' && inc.incident_status_en === 'Done' && (
+          <CaseClosureCard incident={inc} onSaved={() => loadIncident({ silent: true })} />
+        )}
 
         {relation === 'admin' && (
           <VolunteerRequestsCard incidentId={inc.id} requests={volunteerRequests} onChanged={setVolunteerRequests} />

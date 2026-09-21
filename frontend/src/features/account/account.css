@@ -551,3 +551,62 @@
   background: var(--journey-accent-dim);
   color: var(--journey-accent);
 }
+
+/* ── Admin case-detail dashboard (grouped read view + edit form) ─────────── */
+
+.account-field-groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 28px;
+}
+@media (max-width: 560px) {
+  .account-field-groups { grid-template-columns: 1fr; }
+}
+
+.account-field-group-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-teal);
+  margin-bottom: 8px;
+  margin-top: 20px;
+}
+.account-field-groups > .account-field-group-title:nth-child(-n+2) { margin-top: 0; }
+
+.account-field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-dim);
+  font-size: 12px;
+}
+.account-field-row:last-of-type { border-bottom: none; }
+
+.account-field-row-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.account-field-row-value {
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
+.account-form-section-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-teal);
+  margin: 22px 0 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-dim);
+}
+.account-form > .account-form-section-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}

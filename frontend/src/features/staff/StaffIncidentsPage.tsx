@@ -6,6 +6,7 @@ const MONO = "'JetBrains Mono', 'Courier New', monospace";
 const BG   = '#06090f';
 const BG2  = '#0c1420';
 const TEAL = '#00c9b1';
+const AMBER = '#ffb930';
 
 interface IncidentRow {
   id: number;
@@ -20,6 +21,7 @@ interface IncidentRow {
   patient_gender: string;
   patient_phone: string;
   filer_info: string;
+  pending_volunteer_requests: number;
 }
 
 function IncidentRowCard({ incident }: { incident: IncidentRow }) {
@@ -27,8 +29,9 @@ function IncidentRowCard({ incident }: { incident: IncidentRow }) {
     <Link
       to={`/incidents/${incident.id}`}
       style={{
-        display: 'block', background: BG2, border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10,
-        padding: '1rem 1.25rem', marginBottom: 10, textDecoration: 'none', color: 'inherit',
+        display: 'block', background: BG2,
+        border: `1px solid ${incident.pending_volunteer_requests > 0 ? 'rgba(255,185,48,0.35)' : 'rgba(255,255,255,0.07)'}`,
+        borderRadius: 10, padding: '1rem 1.25rem', marginBottom: 10, textDecoration: 'none', color: 'inherit',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -45,6 +48,15 @@ function IncidentRowCard({ incident }: { incident: IncidentRow }) {
               {incident.patient_name && `Patient: ${incident.patient_name}${incident.patient_age ? `, ${incident.patient_age}` : ''}${incident.patient_gender ? `, ${incident.patient_gender}` : ''}${incident.patient_phone ? ` · ${incident.patient_phone}` : ''}`}
               {incident.patient_name && incident.filer_info && '  ·  '}
               {incident.filer_info && `Filed by: ${incident.filer_info}`}
+            </div>
+          )}
+          {incident.pending_volunteer_requests > 0 && (
+            <div style={{
+              display: 'inline-block', marginTop: 6, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontWeight: 700, color: AMBER, background: 'rgba(255,185,48,0.12)', border: '1px solid rgba(255,185,48,0.28)',
+              borderRadius: 100, padding: '2px 8px',
+            }}>
+              ⏳ {incident.pending_volunteer_requests} volunteer{incident.pending_volunteer_requests > 1 ? 's' : ''} awaiting approval
             </div>
           )}
         </div>
@@ -103,6 +115,8 @@ export default function StaffIncidentsPage() {
       .catch(() => setError('Network error.'));
   }
 
+  const totalPending = incidents?.reduce((sum, inc) => sum + inc.pending_volunteer_requests, 0) ?? 0;
+
   return (
     <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO }}>
       <div style={{
@@ -116,7 +130,17 @@ export default function StaffIncidentsPage() {
             {isAdmin ? 'ADMIN CONSOLE' : 'VOLUNTEER CONSOLE'}
           </span>
         </div>
-        <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← My Account</Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {isAdmin && totalPending > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: AMBER, background: 'rgba(255,185,48,0.12)',
+              border: '1px solid rgba(255,185,48,0.28)', borderRadius: 100, padding: '4px 10px',
+            }}>
+              ⏳ {totalPending} pending volunteer request{totalPending > 1 ? 's' : ''}
+            </span>
+          )}
+          <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← My Account</Link>
+        </div>
       </div>
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 5rem' }}>

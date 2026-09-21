@@ -2,6 +2,20 @@ GROUP_OPENED = "נפתח אירוע"
 INCIDENT_HANDLED_BY_RON = "טופל על ידי רון"
 SIGNIFICANT_INCIDENT = "אירוע משמעותי"
 
+# color_mkvvrm1r ("סיווג הפנייה" — the internal case status HANDLED_STATUSES
+# is matched against) Hebrew → English translations. All 6 labels queried
+# directly from the board's real column settings — an admin editing this
+# through the app must only ever be able to pick a label that actually
+# exists on the board, never free text.
+STATUS_TRANSLATIONS = {
+    'הוחלט בחמ"ל לא לפתוח אירוע': 'Decided Not To Open',
+    GROUP_OPENED:                  'Case Opened',
+    'טופל על ידי חברת הביטוח':      'Handled By Insurance',
+    INCIDENT_HANDLED_BY_RON:       'Handled By Ron',
+    'לא נחתם הסכם מתן שירות':       'Service Agreement Not Signed',
+    SIGNIFICANT_INCIDENT:          'Significant Incident',
+}
+
 # status_mkmbjwef values — used by the map layer
 MAP_LIVE_STATUSES     = {'Live', 'Active', 'Working on it'}
 MAP_HANDLED_STATUSES  = {'Done', 'Completed'}
@@ -28,6 +42,163 @@ GENDER_TRANSLATIONS = {
     'זכר':  'Male',
     'נקבה': 'Female',
     'אחר':  'Other',
+}
+
+# status_mkmbjwef ("סטטוס" — the workflow status the map layer already reads,
+# see MAP_LIVE_STATUSES/MAP_HANDLED_STATUSES/NEW_REQUEST_STATUS above)
+# labels — already English on the board itself, so this is an identity map
+# rather than a real translation. Kept in the same {real_label: display_label}
+# shape as every other *_TRANSLATIONS dict below so the admin-edit code path
+# can treat every choice field uniformly regardless of whether the board's
+# own labels happen to be Hebrew or English.
+INCIDENT_STATUS_TRANSLATIONS = {
+    NEW_REQUEST_STATUS: NEW_REQUEST_STATUS,
+    'Working on it':    'Working on it',
+    'Live':              'Live',
+    'Stuck':             'Stuck',
+    'Done':              'Done',
+}
+
+# color_mm32c8wh ("Case Stage" — the public/family case-tracker step this
+# drives, see tracker_service.STEP_DEFINITIONS) — already English. Identity
+# map, same reasoning as INCIDENT_STATUS_TRANSLATIONS above. Kept as the
+# exact real label strings (including the messy near-duplicate "Request
+# Received" entries) — every option shown must be one that really exists on
+# the board, never a cleaned-up rewrite of it.
+CASE_STAGE_TRANSLATIONS = {
+    '1. Request Received':                    '1. Request Received',
+    'Request Received':                       'Request Received',
+    '2. Situation Assessment':                '2. Situation Assessment',
+    '3. Critical Information Verified':       '3. Critical Information Verified',
+    '4. Case Officer Assigned':               '4. Case Officer Assigned',
+    '5. Response Network Activated':          '5. Response Network Activated',
+    '6. Action Plan in Motion':               '6. Action Plan in Motion',
+    '7. Person’s Status Verified':            '7. Person’s Status Verified',
+    '7 (loss). Family Notified with Care':    '7 (loss). Family Notified with Care',
+    '8. Support & Next Steps':                '8. Support & Next Steps',
+    '8 (loss). Family Support & Next Steps':  '8 (loss). Family Support & Next Steps',
+}
+
+# single_selectynfloxz ("שירות מילואים / סדיר קרבי" — is the patient/victim
+# in active combat military service) Hebrew → English translations.
+COMBAT_SERVICE_TRANSLATIONS = {
+    'מילואים קרבי': 'Reserve (Combat)',
+    'סדיר קרבי':    'Regular Service (Combat)',
+    'לא':           'No',
+}
+
+# color_mkmbwnzy ("ביטוח" — the patient/victim's travel/medical insurer)
+# Hebrew → English translations. The board also has one blank label
+# (position 5) — deliberately excluded, it isn't a real selectable option.
+INSURANCE_TRANSLATIONS = {
+    'לא ידוע':           'Unknown',
+    'ללא':               'None',
+    'הראל':              'Harel',
+    'פספורטקארד':        'PassportCard',
+    'ביטוח ישיר':        'Direct Insurance',
+    'לא רלוונטי':        'Not Relevant',
+    'כלל':               'Clal',
+    'מגדל':              'Migdal',
+    'ביטוח לא ישראלי':   'Non-Israeli Insurance',
+    'הייתה אזהרת מסע':   'Travel Warning Existed',
+    'הפניקס':            'Phoenix',
+    'מנורה':             'Menorah',
+    'AIG':               'AIG',
+    'כיסוי אירופי':      'European Coverage',
+}
+
+# color_mkmbpyxw ("איך פנו אלינו" — how this case first reached the org: a
+# referral channel, or the name of whoever brought it to us) Hebrew →
+# English translations. One blank label (position 5) excluded.
+CALL_SOURCE_TRANSLATIONS = {
+    'שהה באותו המקום':                    'Was At The Same Location',
+    'עומר אביר':                          'Omer Avir',
+    'נציג מחב"ד/הצלה Air לא ברור':        'Chabad/Air Rescue Rep — Unclear',
+    '?':                                   '?',
+    'משרד החוץ בהודו':                    'Foreign Ministry — India',
+    'רון':                                'Ron',
+    'רץ ברשת':                            'Went Viral Online',
+    'יפתח':                               'Yiftach',
+    'חמ"ל':                               'War Room (Chamal)',
+    'אנחנו פנינו אליהם אחרי פרסום באינסטגרם': 'We Reached Out After Instagram Post',
+    'חברים מקומיים של רון':               "Ron's Local Friends",
+    'לירן':                               'Liran',
+    'בקי':                                'Becky',
+    'עידו':                               'Ido',
+    'הלל':                                'Hillel',
+    'LAYA':                               'LAYA',
+    'משרד החוץ בישראל':                   'Foreign Ministry — Israel',
+    'מגנוס':                              'Magnus',
+    'דני':                                'Danny',
+}
+
+# color_mkmbwakp ("כונן/ת" — the duty officer / "CCC Official" on shift when
+# the case came in) Hebrew → English. This column is a roster of staff/
+# volunteer first names, not a set of categories — one blank label
+# (position 5) excluded.
+CCC_OFFICIAL_TRANSLATIONS = {
+    'מימי':    'Mimi',
+    'לירן':    'Liran',
+    'רון':     'Ron',
+    'יוני':    'Yoni',
+    'עידו':    'Ido',
+    'שחר דר':  'Shachar Dar',
+    'לי-אור':  'Li-Or',
+    'נופר':    'Nofar',
+    'אביבית':  'Avivit',
+    'הלל':     'Hillel',
+    'דורון':   'Doron',
+    'אחר (להוסיף ידנית אחרי מילוי הטופס)': 'Other (add manually after filling the form)',
+    'זיו':     'Ziv',
+    'בר':      'Bar',
+    'גדעון':   'Gideon',
+    'גיא שדות': 'Guy Sadot',
+    'עומר':    'Omer',
+    'ניר':     'Nir',
+    'דור':     'Dor',
+    'רוני':    'Roni',
+    'גל':      'Gal',
+    'גיא גלובקה': 'Guy Globka',
+    'יפתח':    'Yiftach',
+    'אריאלה':  'Ariela',
+}
+
+# status_mkmb9hbk ("מנהל/ת אירוע" — the staff member managing this case)
+# Hebrew → English. Another staff-name roster, same reasoning as
+# CCC_OFFICIAL_TRANSLATIONS. One blank label (position 5) excluded.
+INCIDENT_MANAGER_TRANSLATIONS = {
+    'לירן':          'Liran',
+    'שחר בן ארצי':   'Shachar Ben Artzi',
+    'בקי':           'Becky',
+    'נופר':          'Nofar',
+    'רון':           'Ron',
+    'אבינועם':       'Avinoam',
+    'יפתח':          'Yiftach',
+    'בר':            'Bar',
+    'עידו':          'Ido',
+    'זיו':           'Ziv',
+    'שרי':           'Sarai',
+    'דפנה':          'Dafna',
+    'הלל':           'Hillel',
+    'יעל':           'Yael',
+    'שחר דר':        'Shachar Dar',
+    'דור':           'Dor',
+    'גיא שדות':      'Guy Sadot',
+    'פונדק':         'Pundak',
+    'רוני':          'Roni',
+    'אפרת אביסרור':  'Efrat Avisror',
+    'עומר':          'Omer',
+    'גיא גלובקה':    'Guy Globka',
+}
+
+# status_mkmb6bm2 ("סופרווייזר" — the supervisor overseeing this case)
+# Hebrew → English.
+SUPERVISOR_TRANSLATIONS = {
+    'בקי':      'Becky',
+    'אחיאב':    'Achiav',
+    'יפתח':     'Yiftach',
+    'רון':      'Ron',
+    'אבינועם':  'Avinoam',
 }
 
 # ISO-3166-1 alpha-2 country list for the "Open a Call" form's Country field.

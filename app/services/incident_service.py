@@ -167,3 +167,19 @@ def approve_volunteer_request(request: IncidentVolunteer) -> None:
 
 def list_volunteer_requests(incident_id: int) -> list[IncidentVolunteer]:
     return IncidentVolunteer.query.filter_by(incident_id=incident_id).order_by(IncidentVolunteer.requested_at).all()
+
+
+def count_pending_volunteer_requests(incident_ids: list[int]) -> dict[int, int]:
+    """Pending (not yet approved) volunteer request count per incident, for
+    the staff list view — so a case with someone waiting on approval doesn't
+    go unnoticed just because nobody happened to open its page. One grouped
+    query instead of one per incident."""
+    if not incident_ids:
+        return {}
+    rows = (
+        db.session.query(IncidentVolunteer.incident_id, db.func.count(IncidentVolunteer.id))
+        .filter(IncidentVolunteer.incident_id.in_(incident_ids), IncidentVolunteer.approved_at.is_(None))
+        .group_by(IncidentVolunteer.incident_id)
+        .all()
+    )
+    return {incident_id: count for incident_id, count in rows}

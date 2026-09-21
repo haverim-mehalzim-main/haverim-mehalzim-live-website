@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
-from app.features.incidents.service import fetch_monday_data, create_incident, fetch_incidents_by_ids
+from app.features.incidents.service import fetch_monday_data, create_incident, update_incident, fetch_incidents_by_ids
 from app.features.incidents.tracker_service import fetch_case_status
 from app.features.incidents.donor_service import fetch_donor_by_token, is_valid_token_format, fetch_leaderboard
 from app.features.incidents.feedback_service import (
@@ -43,7 +43,22 @@ from app.features.incidents.constants import (
     GENDER_TRANSLATIONS,
     COUNTRIES,
     COUNTRY_NAME_BY_CODE,
+    STATUS_TRANSLATIONS,
+    INCIDENT_STATUS_TRANSLATIONS,
+    CASE_STAGE_TRANSLATIONS,
+    COMBAT_SERVICE_TRANSLATIONS,
+    INSURANCE_TRANSLATIONS,
+    CALL_SOURCE_TRANSLATIONS,
+    CCC_OFFICIAL_TRANSLATIONS,
+    INCIDENT_MANAGER_TRANSLATIONS,
+    SUPERVISOR_TRANSLATIONS,
 )
+
+# Monday's country column returns the name text, not the ISO code — the
+# admin edit form's country <select> needs the code to pre-select the
+# current value, so this is the one reverse lookup _serialize_incident needs
+# that COUNTRY_NAME_BY_CODE itself doesn't already provide.
+_COUNTRY_CODE_BY_NAME = {v: k for k, v in COUNTRY_NAME_BY_CODE.items()}
 from app.extensions import db
 from app.services.auth_service import current_user
 from app.services.account_service import user_has_role
@@ -629,7 +644,16 @@ _OPEN_CALL_RATE_WINDOW = 60
 def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> dict:
     """Merge the local ownership row with its live Monday.com fields. Monday
     stays the source of truth for everything except who opened it and when —
-    `monday_row` can be None if the item was since deleted on Monday."""
+    `monday_row` can be None if the item was since deleted on Monday.
+
+    Every "pick one label" field is exposed twice: the raw board value
+    (Hebrew, or English where the board's own labels already are — used for
+    internal matching like HANDLED_STATUSES) and an "_en" English
+    translation (used for display and to pre-select the admin edit form's
+    dropdown). city/patient_phone/description each have a local override
+    (see Incident.submitted_*) that wins over Monday's own text — an admin
+    edit through this app updates both together (see staff_update_incident)
+    so the two can never show something different from each other."""
     row = monday_row or {}
     hebrew_type = row.get('status_mkmb1zc6', '')
     # The requester's own submission time (Incident.created_at), not Monday's
@@ -638,6 +662,15 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
     # worked, which is a different date than when it was opened.
     opened_date = local_incident.created_at.date().isoformat()
     status_label = row.get('color_mkvvrm1r', '')
+    incident_status = row.get('status_mkmbjwef', '') or ''
+    case_stage = row.get('color_mm32c8wh', '') or ''
+    insurance = row.get('color_mkmbwnzy', '') or ''
+    combat_service = row.get('single_selectynfloxz', '') or ''
+    call_source = row.get('color_mkmbpyxw', '') or ''
+    ccc_official = row.get('color_mkmbwakp', '') or ''
+    incident_manager = row.get('status_mkmb9hbk', '') or ''
+    supervisor = row.get('status_mkmb6bm2', '') or ''
+    country_name = row.get('country_mkmb91h3', '') or ''
 
     hebrew_gender = row.get('color_mkngmw3', '')
 
@@ -661,8 +694,9 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         # kept locally. Country IS a real structured Monday column now, so
         # its text comes straight from Monday like everything else.
         'city': local_incident.submitted_location or '',
-        'country': row.get('country_mkmb91h3', ''),
-        'location': ', '.join(p for p in [local_incident.submitted_location, row.get('country_mkmb91h3', '')] if p),
+        'country': country_name,
+        'country_code': _COUNTRY_CODE_BY_NAME.get(country_name, ''),
+        'location': ', '.join(p for p in [local_incident.submitted_location, country_name] if p),
         # Prefer the requester's own untouched text (see
         # Incident.submitted_description); falls back to Monday's raw column
         # for incidents opened any other way (no local row to prefer).
@@ -670,9 +704,39 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         'life_threatening': bool(row.get('check_mkn3c7v8')),
         'opened_date': opened_date,
         'status_label': status_label,
+        # English translation of status_label, for the admin edit form's
+        # dropdown to pre-select the current value — status_label itself
+        # stays the raw Hebrew text everywhere else, unchanged.
+        'status_label_en': STATUS_TRANSLATIONS.get(status_label, ''),
         'handled': status_label in HANDLED_STATUSES,
         'found_on_monday': monday_row is not None,
         'created_at': local_incident.created_at.isoformat(),
+
+        # ── Extended case detail (admin dashboard + edit) ──────────────────
+        'incident_status': incident_status,
+        'incident_status_en': INCIDENT_STATUS_TRANSLATIONS.get(incident_status, ''),
+        'case_stage': case_stage,
+        'case_stage_en': CASE_STAGE_TRANSLATIONS.get(case_stage, ''),
+        'insurance': insurance,
+        'insurance_en': INSURANCE_TRANSLATIONS.get(insurance, ''),
+        'combat_service': combat_service,
+        'combat_service_en': COMBAT_SERVICE_TRANSLATIONS.get(combat_service, ''),
+        'call_source': call_source,
+        'call_source_en': CALL_SOURCE_TRANSLATIONS.get(call_source, ''),
+        'ccc_official': ccc_official,
+        'ccc_official_en': CCC_OFFICIAL_TRANSLATIONS.get(ccc_official, ''),
+        'incident_manager': incident_manager,
+        'incident_manager_en': INCIDENT_MANAGER_TRANSLATIONS.get(incident_manager, ''),
+        'supervisor': supervisor,
+        'supervisor_en': SUPERVISOR_TRANSLATIONS.get(supervisor, ''),
+        'in_request_at': row.get('text_mkmbt7j5', '') or '',
+        'closed_at': row.get('text_mm435fh9', '') or '',
+
+        # Case-closure form (shown once incident_status is "Done" — see
+        # IncidentDetailPage.tsx's CaseClosureCard).
+        'closure_summary': row.get('long_text_mknd9c64', '') or '',
+        'closure_lessons': row.get('long_text_mm31t5ky', '') or '',
+        'closure_locating_point': row.get('text_mkmbref6', '') or '',
     }
 
 
@@ -767,6 +831,31 @@ def get_incident_types():
     same translation table used to display incidents, so the list can never
     drift out of sync with what the backend actually accepts."""
     return jsonify({'success': True, 'types': sorted(set(INCIDENT_TYPE_TRANSLATIONS.values()))}), 200
+
+
+@incidents_bp.route('/api/staff/incident-field-options')
+def get_incident_field_options():
+    """Every dropdown option list the admin case-detail edit form needs, in
+    one response — real board labels only (see the *_TRANSLATIONS dicts in
+    constants.py), already translated to English, so an edit can never write
+    a label Monday doesn't already recognize. Staff-only: some of this
+    (duty-officer rosters, referral sources) is internal team info, not
+    public-facing."""
+    if _staff_role_check() is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    return jsonify({
+        'success': True,
+        'statuses': list(STATUS_TRANSLATIONS.values()),
+        'incident_statuses': list(INCIDENT_STATUS_TRANSLATIONS.values()),
+        'case_stages': list(CASE_STAGE_TRANSLATIONS.values()),
+        'genders': list(GENDER_TRANSLATIONS.values()),
+        'combat_services': list(COMBAT_SERVICE_TRANSLATIONS.values()),
+        'insurances': list(INSURANCE_TRANSLATIONS.values()),
+        'call_sources': list(CALL_SOURCE_TRANSLATIONS.values()),
+        'ccc_officials': list(CCC_OFFICIAL_TRANSLATIONS.values()),
+        'incident_managers': list(INCIDENT_MANAGER_TRANSLATIONS.values()),
+        'supervisors': list(SUPERVISOR_TRANSLATIONS.values()),
+    }), 200
 
 
 @incidents_bp.route('/api/countries')
@@ -1070,14 +1159,105 @@ def staff_list_incidents():
         row['id']: row
         for row in fetch_incidents_by_ids([i.monday_item_id for i in local_incidents])
     }
+    pending_counts = incident_service.count_pending_volunteer_requests([i.id for i in local_incidents])
 
     result = []
     for inc in local_incidents:
         serialized = _serialize_incident(inc, monday_rows.get(inc.monday_item_id))
         serialized['owner'] = {'email': inc.user.email, 'full_name': inc.user.full_name} if inc.user else None
+        serialized['pending_volunteer_requests'] = pending_counts.get(inc.id, 0)
         result.append(serialized)
 
     return jsonify({'success': True, 'incidents': result}), 200
+
+
+_LABEL_FIELD_VALIDATORS = {
+    'incident_type':    INCIDENT_TYPE_TRANSLATIONS,
+    'status_label':     STATUS_TRANSLATIONS,
+    'incident_status':  INCIDENT_STATUS_TRANSLATIONS,
+    'case_stage':       CASE_STAGE_TRANSLATIONS,
+    'patient_gender':   GENDER_TRANSLATIONS,
+    'combat_service':   COMBAT_SERVICE_TRANSLATIONS,
+    'insurance':        INSURANCE_TRANSLATIONS,
+    'call_source':      CALL_SOURCE_TRANSLATIONS,
+    'ccc_official':     CCC_OFFICIAL_TRANSLATIONS,
+    'incident_manager': INCIDENT_MANAGER_TRANSLATIONS,
+    'supervisor':       SUPERVISOR_TRANSLATIONS,
+}
+
+_PLAIN_TEXT_BODY_FIELDS = (
+    'description', 'caller_info', 'in_request_at', 'closed_at',
+    'closure_locating_point', 'closure_summary', 'closure_lessons', 'city',
+)
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>', methods=['PATCH'])
+def staff_update_incident(local_id):
+    """Admin-only edit of an incident's own details — written straight
+    through to its Monday.com item. Monday stays the source of truth; this
+    is the write path that lets staff manage a case through the app instead
+    of switching over to Monday's own UI."""
+    from flask import request
+
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    incident = db.session.get(Incident, local_id)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    body = request.get_json(silent=True) or {}
+    fields: dict = {}
+
+    for field, translations in _LABEL_FIELD_VALIDATORS.items():
+        if field not in body:
+            continue
+        value = body[field]
+        if value not in translations.values():
+            return jsonify({'success': False, 'message': f'Invalid value for {field}.'}), 400
+        fields[field] = value
+
+    for field in _PLAIN_TEXT_BODY_FIELDS:
+        if field in body and body[field] is not None:
+            fields[field] = str(body[field]).strip()[:5000]
+
+    if 'patient_phone' in body and body['patient_phone'] is not None:
+        fields['patient_phone'] = str(body['patient_phone']).strip()[:40]
+
+    if 'patient_age' in body and body['patient_age'] is not None:
+        try:
+            fields['patient_age'] = max(0, min(150, int(body['patient_age'])))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid patient age.'}), 400
+
+    if 'life_threatening' in body:
+        fields['life_threatening'] = bool(body['life_threatening'])
+
+    if body.get('country_code'):
+        country_code = str(body['country_code']).strip().upper()
+        if country_code not in COUNTRY_NAME_BY_CODE:
+            return jsonify({'success': False, 'message': 'Invalid country.'}), 400
+        fields['country_code'] = country_code
+
+    if not fields:
+        return jsonify({'success': True, 'warnings': []}), 200
+
+    ok, warnings = update_incident(item_id=incident.monday_item_id, fields=fields)
+    if not ok:
+        return jsonify({'success': False, 'message': "Could not save changes to Monday.com — this incident may not have a valid Monday item. Please try again shortly."}), 502
+
+    # A few fields have a local override that _serialize_incident prefers
+    # over Monday's own column — without updating it here too, an edit
+    # would write to Monday but never actually show up anywhere in the app.
+    if 'description' in fields:
+        incident.submitted_description = fields['description']
+    if 'city' in fields:
+        incident.submitted_location = fields['city']
+    if 'patient_phone' in fields:
+        incident.submitted_patient_phone = fields['patient_phone']
+    db.session.commit()
+
+    return jsonify({'success': True, 'warnings': warnings}), 200
 
 
 @incidents_bp.route('/api/staff/incidents/<int:local_id>/tasks', methods=['POST'])
