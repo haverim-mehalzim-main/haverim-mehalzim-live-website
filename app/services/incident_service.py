@@ -165,8 +165,16 @@ def approve_volunteer_request(request: IncidentVolunteer) -> None:
     request.approved_at = datetime.now(timezone.utc)
 
 
-def list_volunteer_requests(incident_id: int) -> list[IncidentVolunteer]:
-    return IncidentVolunteer.query.filter_by(incident_id=incident_id).order_by(IncidentVolunteer.requested_at).all()
+def list_pending_volunteer_requests(incident_id: int) -> list[IncidentVolunteer]:
+    """Requests still awaiting a decision — excludes already-approved ones,
+    so an approved volunteer doesn't keep reappearing in the admin's
+    'Requesting to Join' list on every page reload."""
+    return (
+        IncidentVolunteer.query
+        .filter_by(incident_id=incident_id, approved_at=None)
+        .order_by(IncidentVolunteer.requested_at)
+        .all()
+    )
 
 
 def count_pending_volunteer_requests(incident_ids: list[int]) -> dict[int, int]:

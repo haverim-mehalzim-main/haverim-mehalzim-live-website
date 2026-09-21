@@ -1044,7 +1044,7 @@ def incident_detail(local_id):
 
     if relation == 'admin':
         tasks = incident_service.list_tasks(incident.id)
-        pending = incident_service.list_volunteer_requests(incident.id)
+        pending = incident_service.list_pending_volunteer_requests(incident.id)
         return jsonify({
             'success': True,
             'relation': relation,
