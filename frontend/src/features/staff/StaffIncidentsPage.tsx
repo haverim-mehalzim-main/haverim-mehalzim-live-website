@@ -122,24 +122,24 @@ export default function StaffIncidentsPage() {
       <div style={{
         position: 'sticky', top: 0, zIndex: 10, background: `${BG}ee`, backdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(0,201,177,0.12)', padding: '1rem 1.5rem',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 8,
       }}>
-        <div>
+        <div style={{ whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Haverim Mehalzim</span>
           <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em', marginLeft: 12 }}>
             {isAdmin ? 'ADMIN CONSOLE' : 'VOLUNTEER CONSOLE'}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           {isAdmin && totalPending > 0 && (
             <span style={{
               fontSize: 10, fontWeight: 700, color: AMBER, background: 'rgba(255,185,48,0.12)',
-              border: '1px solid rgba(255,185,48,0.28)', borderRadius: 100, padding: '4px 10px',
+              border: '1px solid rgba(255,185,48,0.28)', borderRadius: 100, padding: '4px 10px', whiteSpace: 'nowrap',
             }}>
               ⏳ {totalPending} pending volunteer request{totalPending > 1 ? 's' : ''}
             </span>
           )}
-          <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← My Account</Link>
+          <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← My Account</Link>
         </div>
       </div>
 
