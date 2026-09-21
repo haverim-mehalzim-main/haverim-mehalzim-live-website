@@ -495,8 +495,8 @@ function TextField({ label, value, onChange, placeholder }: {
   );
 }
 
-function EditCaseCard({ incident, onSaved }: {
-  incident: IncidentDetail; onSaved: () => void;
+function EditCaseCard({ incident, canEdit, onSaved }: {
+  incident: IncidentDetail; canEdit: boolean; onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [types, setTypes] = useState<string[]>([]);
@@ -576,12 +576,14 @@ function EditCaseCard({ incident, onSaved }: {
       <div className="account-card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div className="account-section-title">◈ Case Details</div>
-          <button
-            className="account-submit" style={{ width: 'auto', padding: '6px 14px', fontSize: 11 }}
-            onClick={() => { setEditing(true); setSaved(false); }}
-          >
-            ✎ Edit
-          </button>
+          {canEdit && (
+            <button
+              className="account-submit" style={{ width: 'auto', padding: '6px 14px', fontSize: 11 }}
+              onClick={() => { setEditing(true); setSaved(false); }}
+            >
+              ✎ Edit
+            </button>
+          )}
         </div>
         {saved && <p style={{ fontSize: 12, color: 'var(--accent-teal)', marginBottom: 12 }}>✓ Saved to Monday.com.</p>}
         {warnings.length > 0 && warnings.map((w, i) => (
@@ -979,8 +981,8 @@ export default function IncidentDetailPage() {
           </div>
         </div>
 
-        {relation === 'admin' && (
-          <EditCaseCard incident={inc} onSaved={() => loadIncident({ silent: true })} />
+        {isStaffRelation && (
+          <EditCaseCard incident={inc} canEdit={relation === 'admin'} onSaved={() => loadIncident({ silent: true })} />
         )}
 
         {relation === 'admin' && inc.incident_status_en === 'Done' && (
