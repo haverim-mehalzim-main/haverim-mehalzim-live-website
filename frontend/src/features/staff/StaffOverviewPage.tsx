@@ -15,7 +15,6 @@ interface OverviewData {
   ccc_workload: [string, number][];
   manager_workload: [string, number][];
   supervisor_workload: [string, number][];
-  stuck_incidents: { id: string; name: string; incident_manager: string }[];
   pending_volunteer_total: number;
   pending_volunteer_incidents: { incident_id: number; incident_name: string; count: number; oldest_requested_at: string }[];
 }
@@ -23,8 +22,6 @@ interface OverviewData {
 const STATUS_COLORS: Record<string, string> = {
   'New Request by User': TEAL,
   'Working on it': AMBER,
-  'Live': '#4da6ff',
-  'Stuck': RED,
   'Done': 'rgba(255,255,255,0.35)',
 };
 
@@ -148,20 +145,6 @@ export default function StaffOverviewPage() {
                 ))}
               </div>
             </div>
-
-            {data.stuck_incidents.length > 0 && (
-              <div style={{ marginBottom: '2.5rem' }}>
-                <SectionTitle>Stuck Cases ({data.stuck_incidents.length})</SectionTitle>
-                <div style={{ background: BG2, border: '1px solid rgba(248,113,113,0.25)', borderRadius: 10, padding: '0.5rem 1.25rem' }}>
-                  {data.stuck_incidents.map(inc => (
-                    <div key={inc.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
-                      <span style={{ color: '#e2e8f0', fontWeight: 700 }}>{inc.name}</span>
-                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>{inc.incident_manager || 'Unassigned'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div style={{ marginBottom: '2.5rem' }}>
               <SectionTitle>Workload (active, non-Done cases)</SectionTitle>

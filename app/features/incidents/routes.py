@@ -32,7 +32,6 @@ from app.features.incidents.analysis import (
     get_our_impact,
     count_by_incident_status,
     count_active_workload,
-    get_stuck_incidents,
 )
 from app.features.incidents.constants import (
     GROUP_OPENED,
@@ -1211,7 +1210,6 @@ def staff_overview():
         'ccc_workload': sorted(count_active_workload(all_rows, 'color_mkmbwakp', CCC_OFFICIAL_TRANSLATIONS).items(), key=lambda kv: -kv[1]),
         'manager_workload': sorted(count_active_workload(all_rows, 'status_mkmb9hbk', INCIDENT_MANAGER_TRANSLATIONS).items(), key=lambda kv: -kv[1]),
         'supervisor_workload': sorted(count_active_workload(all_rows, 'status_mkmb6bm2', SUPERVISOR_TRANSLATIONS).items(), key=lambda kv: -kv[1]),
-        'stuck_incidents': get_stuck_incidents(all_rows),
         'pending_volunteer_total': sum(p['count'] for p in pending),
         'pending_volunteer_incidents': pending_out,
     }), 200

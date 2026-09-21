@@ -87,7 +87,8 @@ export default function AccountPage() {
   const [donations, setDonations] = useState<DonationSummary[]>([]);
   const [donationsLoaded, setDonationsLoaded] = useState(false);
 
-  const isStaff = user?.roles.includes('admin') || user?.roles.includes('volunteer');
+  const isAdmin = user?.roles.includes('admin') ?? false;
+  const isStaff = isAdmin || (user?.roles.includes('volunteer') ?? false);
   const isDonor = user?.roles.includes('donor');
 
   useEffect(() => {
@@ -154,10 +155,24 @@ export default function AccountPage() {
 
             {isStaff && (
               <div className="account-section">
-                <Link to="/staff/incidents" className="account-staff-console-link">
-                  <span>◈ Staff Console — view and work incidents</span>
-                  <span>→</span>
-                </Link>
+                <div className="account-staff-links">
+                  {isAdmin && (
+                    <Link to="/staff/overview" className="account-staff-console-link account-staff-console-link--overview">
+                      <span>
+                        ◈ Management Overview
+                        <span className="account-staff-console-link-sub">Pipeline, workload &amp; approvals</span>
+                      </span>
+                      <span>→</span>
+                    </Link>
+                  )}
+                  <Link to="/staff/incidents" className="account-staff-console-link">
+                    <span>
+                      ◈ Staff Console
+                      <span className="account-staff-console-link-sub">View and work incidents</span>
+                    </span>
+                    <span>→</span>
+                  </Link>
+                </div>
               </div>
             )}
 
