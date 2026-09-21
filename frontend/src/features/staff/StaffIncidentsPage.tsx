@@ -139,6 +139,9 @@ export default function StaffIncidentsPage() {
               ⏳ {totalPending} pending volunteer request{totalPending > 1 ? 's' : ''}
             </span>
           )}
+          {isAdmin && (
+            <Link to="/staff/overview" style={{ fontSize: 10, color: TEAL, textDecoration: 'none', whiteSpace: 'nowrap' }}>◈ Overview →</Link>
+          )}
           <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← My Account</Link>
         </div>
       </div>

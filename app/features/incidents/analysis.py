@@ -1,5 +1,10 @@
 from datetime import datetime
-from app.features.incidents.constants import SIGNIFICANT_INCIDENT, INCIDENT_TYPE_TRANSLATIONS
+from app.features.incidents.constants import (
+    SIGNIFICANT_INCIDENT,
+    INCIDENT_TYPE_TRANSLATIONS,
+    INCIDENT_STATUS_TRANSLATIONS,
+    INCIDENT_MANAGER_TRANSLATIONS,
+)
 
 
 def count_incidents_per_type(incidents_list):
@@ -99,6 +104,51 @@ def get_countries_of_incidents(incidents_list):
         if country:
             countries[country] = countries.get(country, 0) + 1
     return countries
+
+
+def count_by_incident_status(incidents_list):
+    """Pipeline breakdown for the management overview dashboard — how many
+    incidents sit in each workflow stage right now. Every real status
+    starts at 0 so a stage nobody is currently in still shows up as empty,
+    not missing."""
+    counts = {label: 0 for label in dict.fromkeys(INCIDENT_STATUS_TRANSLATIONS.values())}
+    for row in incidents_list:
+        raw = (row.get('status_mkmbjwef') or '').strip()
+        label = INCIDENT_STATUS_TRANSLATIONS.get(raw, raw)
+        if label:
+            counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
+def count_active_workload(incidents_list, column_id, translations):
+    """How many non-Done incidents are currently assigned to each person on
+    a given roster column (CCC official / incident manager / supervisor) —
+    Done cases are excluded since they're no longer anyone's active load."""
+    counts = {}
+    for row in incidents_list:
+        if (row.get('status_mkmbjwef') or '').strip() == 'Done':
+            continue
+        raw = (row.get(column_id) or '').strip()
+        name = translations.get(raw, raw)
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def get_stuck_incidents(incidents_list):
+    """Incidents whose workflow status is 'Stuck' — the actionable callout
+    list on the management overview dashboard."""
+    result = []
+    for row in incidents_list:
+        if (row.get('status_mkmbjwef') or '').strip() != 'Stuck':
+            continue
+        raw_manager = (row.get('status_mkmb9hbk') or '').strip()
+        result.append({
+            'id': row.get('id'),
+            'name': row.get('name') or '(unnamed)',
+            'incident_manager': INCIDENT_MANAGER_TRANSLATIONS.get(raw_manager, raw_manager),
+        })
+    return result
 
 
 def get_our_impact(incidents_list):

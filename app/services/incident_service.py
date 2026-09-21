@@ -183,3 +183,25 @@ def count_pending_volunteer_requests(incident_ids: list[int]) -> dict[int, int]:
         .all()
     )
     return {incident_id: count for incident_id, count in rows}
+
+
+def list_pending_volunteer_requests_by_incident() -> list[dict]:
+    """The full volunteer-approval backlog for the management overview
+    dashboard: one entry per incident with at least one pending request,
+    oldest-waiting-request first, with a count of how many are waiting on
+    that case. A single query, not one per incident."""
+    rows = (
+        IncidentVolunteer.query
+        .filter(IncidentVolunteer.approved_at.is_(None))
+        .order_by(IncidentVolunteer.requested_at)
+        .all()
+    )
+    by_incident: dict[int, dict] = {}
+    for req in rows:
+        entry = by_incident.setdefault(req.incident_id, {
+            'incident_id': req.incident_id,
+            'oldest_requested_at': req.requested_at,
+            'count': 0,
+        })
+        entry['count'] += 1
+    return sorted(by_incident.values(), key=lambda e: e['oldest_requested_at'])

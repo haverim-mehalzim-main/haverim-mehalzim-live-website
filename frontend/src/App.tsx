@@ -7,6 +7,7 @@ import FundOurTeamPage from './features/fund/FundOurTeamPage';
 import CaseTrackerPage from './features/tracker/CaseTrackerPage';
 import AdminFeedbackPage from './features/admin/AdminFeedbackPage';
 import StaffIncidentsPage from './features/staff/StaffIncidentsPage';
+import StaffOverviewPage from './features/staff/StaffOverviewPage';
 import DonorImpactPage from './features/donor/DonorImpactPage';
 import PaymentResultPage from './components/PaymentResultPage';
 import SignUpPage from './features/auth/SignUpPage';
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/track/:caseId"   element={<CaseTrackerPage />} />
         <Route path="/admin/feedback"  element={<AdminFeedbackPage />} />
         <Route path="/staff/incidents" element={<StaffIncidentsPage />} />
+        <Route path="/staff/overview"  element={<StaffOverviewPage />} />
         <Route path="/my-impact/:token" element={<DonorImpactPage />} />
         <Route path="/donate/thanks"    element={<PaymentResultPage variant="thanks" kind="donation" />} />
         <Route path="/donate/failed"    element={<PaymentResultPage variant="failed" kind="donation" />} />

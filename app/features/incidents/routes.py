@@ -30,6 +30,9 @@ from app.features.incidents.analysis import (
     get_incidents_last_month,
     get_countries_of_incidents,
     get_our_impact,
+    count_by_incident_status,
+    count_active_workload,
+    get_stuck_incidents,
 )
 from app.features.incidents.constants import (
     GROUP_OPENED,
@@ -1169,6 +1172,49 @@ def staff_list_incidents():
         result.append(serialized)
 
     return jsonify({'success': True, 'incidents': result}), 200
+
+
+@incidents_bp.route('/api/staff/overview')
+def staff_overview():
+    """Admin-only management dashboard: workload and pipeline across the
+    whole Monday.com board (not just incidents opened through the app —
+    those are a small fraction of real cases), plus the volunteer-approval
+    backlog, which is local-only (Monday has no concept of it). Deliberately
+    separate from the Staff Console list: that page is "which case do I
+    open", this one is "how is the team doing overall"."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    all_rows = fetch_monday_data()
+    monday_by_item_id = {row['id']: row for row in all_rows}
+
+    pending = incident_service.list_pending_volunteer_requests_by_incident()
+    pending_incident_ids = [p['incident_id'] for p in pending]
+    local_incidents_by_id = {
+        inc.id: inc for inc in Incident.query.filter(Incident.id.in_(pending_incident_ids)).all()
+    } if pending_incident_ids else {}
+    pending_out = []
+    for p in pending:
+        inc = local_incidents_by_id.get(p['incident_id'])
+        monday_row = monday_by_item_id.get(inc.monday_item_id) if inc else None
+        pending_out.append({
+            'incident_id': p['incident_id'],
+            'incident_name': (monday_row.get('name') if monday_row else None) or f"Incident #{p['incident_id']}",
+            'count': p['count'],
+            'oldest_requested_at': p['oldest_requested_at'].isoformat(),
+        })
+
+    return jsonify({
+        'success': True,
+        'total_incidents': len(all_rows),
+        'incident_status_counts': count_by_incident_status(all_rows),
+        'ccc_workload': sorted(count_active_workload(all_rows, 'color_mkmbwakp', CCC_OFFICIAL_TRANSLATIONS).items(), key=lambda kv: -kv[1]),
+        'manager_workload': sorted(count_active_workload(all_rows, 'status_mkmb9hbk', INCIDENT_MANAGER_TRANSLATIONS).items(), key=lambda kv: -kv[1]),
+        'supervisor_workload': sorted(count_active_workload(all_rows, 'status_mkmb6bm2', SUPERVISOR_TRANSLATIONS).items(), key=lambda kv: -kv[1]),
+        'stuck_incidents': get_stuck_incidents(all_rows),
+        'pending_volunteer_total': sum(p['count'] for p in pending),
+        'pending_volunteer_incidents': pending_out,
+    }), 200
 
 
 _LABEL_FIELD_VALIDATORS = {
