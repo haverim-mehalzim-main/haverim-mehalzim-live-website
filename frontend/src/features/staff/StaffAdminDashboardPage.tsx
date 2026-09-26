@@ -16,7 +16,7 @@ interface VolunteerRequester {
   requested_at: string;
 }
 
-interface OverviewData {
+interface AdminDashboardData {
   total_incidents: number;
   incident_status_counts: Record<string, number>;
   ccc_workload: [string, number][];
@@ -79,9 +79,9 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function StaffOverviewPage() {
+export default function StaffAdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
-  const [data, setData] = useState<OverviewData | null>(null);
+  const [data, setData] = useState<AdminDashboardData | null>(null);
   const [error, setError] = useState('');
 
   const isAdmin = user?.roles.includes('admin') ?? false;
@@ -94,9 +94,9 @@ export default function StaffOverviewPage() {
     return (
       <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: BG2, border: '1px solid rgba(0,201,177,0.14)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: TEAL, marginBottom: '1rem' }}>◈ Management Overview</div>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: TEAL, marginBottom: '1rem' }}>◈ Admin Dashboard</div>
           <p style={{ fontSize: 13, marginBottom: '1.25rem' }}>Log in with an admin account to continue.</p>
-          <Link to="/login?next=/staff/overview" style={{
+          <Link to="/login?next=/staff/admin-dashboard" style={{
             display: 'inline-block', padding: '0.75rem 1.5rem', background: TEAL, color: BG,
             borderRadius: 8, fontFamily: MONO, fontSize: 11, fontWeight: 700, textDecoration: 'none',
           }}>Log In →</Link>
@@ -109,8 +109,8 @@ export default function StaffOverviewPage() {
     return (
       <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: BG2, border: '1px solid rgba(255,77,106,0.2)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
-          <p style={{ fontSize: 13 }}>This overview is admin-only.</p>
-          <Link to="/staff/incidents" style={{ fontSize: 11, color: TEAL }}>← Back to Staff Console</Link>
+          <p style={{ fontSize: 13 }}>This dashboard is admin-only.</p>
+          <Link to="/staff/volunteer-dashboard" style={{ fontSize: 11, color: TEAL }}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -135,10 +135,9 @@ export default function StaffOverviewPage() {
       }}>
         <div style={{ whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Haverim Mehalzim</span>
-          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em', marginLeft: 12 }}>MANAGEMENT OVERVIEW</span>
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em', marginLeft: 12 }}>ADMIN DASHBOARD</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Link to="/staff/incidents" style={{ fontSize: 10, color: TEAL, textDecoration: 'none', whiteSpace: 'nowrap' }}>◈ Staff Console →</Link>
           <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← My Account</Link>
         </div>
       </div>

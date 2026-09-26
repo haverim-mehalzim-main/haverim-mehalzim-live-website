@@ -164,7 +164,7 @@ export default function MondayIncidentDetailPage() {
       <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: BG2, border: '1px solid rgba(255,77,106,0.2)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
           <p style={{ fontSize: 13 }}>This page is admin-only.</p>
-          <Link to="/staff/incidents" style={{ fontSize: 11, color: TEAL }}>← Back to Staff Console</Link>
+          <Link to="/staff/volunteer-dashboard" style={{ fontSize: 11, color: TEAL }}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -200,7 +200,7 @@ export default function MondayIncidentDetailPage() {
       <div className="account-page">
         <div className="account-wrapper">
           <nav className="account-nav">
-            <Link to="/staff/incidents" className="account-back">← Back to Staff Console</Link>
+            <Link to="/staff/admin-dashboard" className="account-back">← Back to Dashboard</Link>
             <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
           </nav>
 

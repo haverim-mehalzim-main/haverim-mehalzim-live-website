@@ -159,19 +159,19 @@ export default function AccountPage() {
               <div className="account-section">
                 <div className="account-staff-links">
                   {isAdmin && (
-                    <Link to="/staff/overview" className="account-staff-console-link account-staff-console-link--overview">
+                    <Link to="/staff/admin-dashboard" className="account-staff-dashboard-link account-staff-dashboard-link--admin">
                       <span>
-                        ◈ Management Overview
-                        <span className="account-staff-console-link-sub">Pipeline, workload &amp; approvals</span>
+                        ◈ Admin Dashboard
+                        <span className="account-staff-dashboard-link-sub">Pipeline, workload &amp; approvals</span>
                       </span>
                       <span>→</span>
                     </Link>
                   )}
                   {!isAdmin && (
-                    <Link to="/staff/incidents" className="account-staff-console-link">
+                    <Link to="/staff/volunteer-dashboard" className="account-staff-dashboard-link">
                       <span>
                         ◈ Volunteer Dashboard
-                        <span className="account-staff-console-link-sub">Done, in-progress &amp; your cases</span>
+                        <span className="account-staff-dashboard-link-sub">Done, in-progress &amp; your cases</span>
                       </span>
                       <span>→</span>
                     </Link>

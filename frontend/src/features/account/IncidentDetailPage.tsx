@@ -752,7 +752,7 @@ export default function IncidentDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
   // React Router doesn't remount this page when navigating to the same
-  // /incidents/:id it's already on (e.g. Staff Console → this incident →
+  // /incidents/:id it's already on (e.g. a dashboard queue → this incident →
   // back → this incident again) — location.key changes on every navigation
   // entry, even to an identical path, so it's what actually forces a refetch.
   // Without it, a volunteer approved to join after their first (preview)
@@ -870,7 +870,7 @@ export default function IncidentDetailPage() {
       <div className="account-page">
         <div className="account-wrapper account-wrapper--narrow">
           <nav className="account-nav">
-            <Link to="/staff/incidents" className="account-back">← Back to Staff Console</Link>
+            <Link to="/staff/volunteer-dashboard" className="account-back">← Back to Dashboard</Link>
             <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
           </nav>
 
@@ -915,8 +915,8 @@ export default function IncidentDetailPage() {
   }
 
   const isStaffRelation = relation === 'admin' || relation === 'volunteer';
-  const backLink = isStaffRelation ? '/staff/incidents' : '/account';
-  const backLabel = isStaffRelation ? '← Back to Staff Console' : '← Back to My Account';
+  const backLink = relation === 'admin' ? '/staff/admin-dashboard' : relation === 'volunteer' ? '/staff/volunteer-dashboard' : '/account';
+  const backLabel = isStaffRelation ? '← Back to Dashboard' : '← Back to My Account';
 
   // ── Owner or staff (admin/volunteer): full detail + task journey ──────────
   const userTasks  = tasks.filter(t => t.assignee === 'user');

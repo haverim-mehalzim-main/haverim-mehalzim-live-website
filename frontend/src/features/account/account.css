@@ -148,7 +148,7 @@
   gap: 10px;
 }
 
-.account-staff-console-link {
+.account-staff-dashboard-link {
   display: flex;
   flex: 1 1 240px;
   align-items: center;
@@ -166,14 +166,14 @@
   text-decoration: none;
   transition: background 0.15s;
 }
-.account-staff-console-link:hover { background: var(--bg-card-hover); }
+.account-staff-dashboard-link:hover { background: var(--bg-card-hover); }
 
-.account-staff-console-link--overview {
+.account-staff-dashboard-link--admin {
   color: var(--accent-amber);
   border-color: rgba(255,185,48,0.3);
 }
 
-.account-staff-console-link-sub {
+.account-staff-dashboard-link-sub {
   display: block;
   margin-top: 3px;
   font-size: 10px;

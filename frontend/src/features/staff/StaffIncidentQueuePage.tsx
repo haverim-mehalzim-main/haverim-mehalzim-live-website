@@ -145,7 +145,7 @@ export default function StaffIncidentQueuePage({ status, title, triage = false, 
       <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: BG2, border: '1px solid rgba(255,77,106,0.2)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
           <p style={{ fontSize: 13 }}>{allowVolunteer ? "Your account doesn't have staff access." : 'This page is admin-only.'}</p>
-          <Link to="/staff/incidents" style={{ fontSize: 11, color: TEAL }}>← Back to Dashboard</Link>
+          <Link to="/staff/volunteer-dashboard" style={{ fontSize: 11, color: TEAL }}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -175,8 +175,8 @@ export default function StaffIncidentQueuePage({ status, title, triage = false, 
         <div style={{ whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Haverim Mehalzim</span>
         </div>
-        <Link to={isAdmin ? '/staff/overview' : '/staff/incidents'} style={{ fontSize: 10, color: TEAL, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-          {isAdmin ? '◈ Overview →' : '← Dashboard'}
+        <Link to={isAdmin ? '/staff/admin-dashboard' : '/staff/volunteer-dashboard'} style={{ fontSize: 10, color: TEAL, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          {isAdmin ? '◈ Admin Dashboard →' : '← Dashboard'}
         </Link>
       </div>
 

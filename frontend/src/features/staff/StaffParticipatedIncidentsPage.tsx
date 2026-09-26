@@ -97,7 +97,7 @@ export default function StaffParticipatedIncidentsPage() {
         <div style={{ whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Haverim Mehalzim</span>
         </div>
-        <Link to="/staff/incidents" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← Back to Dashboard</Link>
+        <Link to="/staff/volunteer-dashboard" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← Back to Dashboard</Link>
       </div>
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 5rem' }}>

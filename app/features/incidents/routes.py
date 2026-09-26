@@ -1284,9 +1284,15 @@ def staff_incidents_by_status():
     Readable by admin or volunteer (volunteers use the 'Working on it' queue
     to find an incident to request to join) — the actual triage actions
     (approve/reject a New Request) stay admin_only on their own routes below,
-    so a volunteer reading the New Request list here just can't act on it."""
-    if _staff_role_check() is None:
+    so a volunteer reading the New Request list here just can't act on it.
+    The caller's own contact info (owner) is admin-only, same as the
+    unapproved-volunteer preview on the incident detail page — a volunteer
+    just browsing this list to find something to join hasn't earned that
+    yet either."""
+    user = _staff_role_check()
+    if user is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    is_admin = user_has_role(user, 'admin')
 
     from flask import request
     status = (request.args.get('status') or '').strip()
@@ -1316,7 +1322,7 @@ def staff_incidents_by_status():
             'life_threatening': bool(row.get('check_mkn3c7v8')),
             'owner': (
                 {'email': local_incident.user.email, 'full_name': local_incident.user.full_name}
-                if local_incident and local_incident.user else None
+                if is_admin and local_incident and local_incident.user else None
             ),
         })
 

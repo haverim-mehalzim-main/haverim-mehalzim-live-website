@@ -8,7 +8,7 @@ const BG2  = '#0c1420';
 const TEAL = '#00c9b1';
 const AMBER = '#ffb930';
 
-interface DashboardData {
+interface VolunteerDashboardData {
   done_count: number;
   in_progress_count: number;
   my_participated_count: number;
@@ -28,10 +28,10 @@ function StatTile({ label, count, to, color }: { label: string; count: number; t
   return to ? <Link to={to} style={tileStyle}>{inner}</Link> : <div style={tileStyle}>{inner}</div>;
 }
 
-export default function StaffIncidentsPage() {
+export default function StaffVolunteerDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<VolunteerDashboardData | null>(null);
   const [error, setError] = useState('');
 
   const isAdmin     = user?.roles.includes('admin') ?? false;
@@ -39,7 +39,7 @@ export default function StaffIncidentsPage() {
   const hasAccess   = isAdmin || isVolunteer;
 
   useEffect(() => {
-    if (isAdmin) navigate('/staff/overview', { replace: true });
+    if (isAdmin) navigate('/staff/admin-dashboard', { replace: true });
   }, [isAdmin, navigate]);
 
   if (authLoading) {
@@ -52,7 +52,7 @@ export default function StaffIncidentsPage() {
         <div style={{ background: BG2, border: '1px solid rgba(0,201,177,0.14)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
           <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: TEAL, marginBottom: '1rem' }}>◈ Volunteer Dashboard</div>
           <p style={{ fontSize: 13, marginBottom: '1.25rem' }}>Log in with your staff account to continue.</p>
-          <Link to="/login?next=/staff/incidents" style={{
+          <Link to="/login?next=/staff/volunteer-dashboard" style={{
             display: 'inline-block', padding: '0.75rem 1.5rem', background: TEAL, color: BG,
             borderRadius: 8, fontFamily: MONO, fontSize: 11, fontWeight: 700, textDecoration: 'none',
           }}>Log In →</Link>

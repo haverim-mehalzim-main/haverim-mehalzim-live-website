@@ -6,8 +6,8 @@ import DashboardPage from './features/dashboard/DashboardPage';
 import FundOurTeamPage from './features/fund/FundOurTeamPage';
 import CaseTrackerPage from './features/tracker/CaseTrackerPage';
 import AdminFeedbackPage from './features/admin/AdminFeedbackPage';
-import StaffIncidentsPage from './features/staff/StaffIncidentsPage';
-import StaffOverviewPage from './features/staff/StaffOverviewPage';
+import StaffVolunteerDashboardPage from './features/staff/StaffVolunteerDashboardPage';
+import StaffAdminDashboardPage from './features/staff/StaffAdminDashboardPage';
 import StaffIncidentQueuePage from './features/staff/StaffIncidentQueuePage';
 import MondayIncidentDetailPage from './features/staff/MondayIncidentDetailPage';
 import StaffParticipatedIncidentsPage from './features/staff/StaffParticipatedIncidentsPage';
@@ -58,8 +58,8 @@ export default function App() {
         <Route path="/fund-our-team" element={<FundOurTeamPage />} />
         <Route path="/track/:caseId"   element={<CaseTrackerPage />} />
         <Route path="/admin/feedback"  element={<AdminFeedbackPage />} />
-        <Route path="/staff/incidents" element={<StaffIncidentsPage />} />
-        <Route path="/staff/overview"  element={<StaffOverviewPage />} />
+        <Route path="/staff/volunteer-dashboard" element={<StaffVolunteerDashboardPage />} />
+        <Route path="/staff/admin-dashboard"     element={<StaffAdminDashboardPage />} />
         <Route path="/staff/requests" element={<StaffIncidentQueuePage status="New Request by User" title="New Requests Awaiting Approval" triage />} />
         <Route path="/staff/in-progress" element={<StaffIncidentQueuePage status="Working on it" title="In Progress" allowVolunteer />} />
         <Route path="/staff/participated" element={<StaffParticipatedIncidentsPage />} />
