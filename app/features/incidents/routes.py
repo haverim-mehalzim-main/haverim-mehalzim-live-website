@@ -1221,41 +1221,19 @@ def my_donations():
 # endpoints still use — this surface is used by volunteer accounts too, not
 # just admins, so a shared secret token was never the right fit for it.
 
-@incidents_bp.route('/api/staff/incidents')
-def staff_list_incidents():
-    if _staff_role_check() is None:
-        return jsonify({'success': False, 'message': 'Forbidden'}), 403
-
-    local_incidents = Incident.query.order_by(Incident.created_at.desc()).all()
-    monday_rows = {
-        row['id']: row
-        for row in fetch_incidents_by_ids([i.monday_item_id for i in local_incidents])
-    }
-    pending_counts = incident_service.count_pending_volunteer_requests([i.id for i in local_incidents])
-
-    result = []
-    for inc in local_incidents:
-        serialized = _serialize_incident(inc, monday_rows.get(inc.monday_item_id))
-        serialized['owner'] = {'email': inc.user.email, 'full_name': inc.user.full_name} if inc.user else None
-        serialized['pending_volunteer_requests'] = pending_counts.get(inc.id, 0)
-        result.append(serialized)
-
-    return jsonify({'success': True, 'incidents': result}), 200
-
-
 @incidents_bp.route('/api/staff/overview')
 def staff_overview():
     """Admin-only management dashboard: workload and pipeline across the
     whole Monday.com board (not just incidents opened through the app —
     those are a small fraction of real cases), plus the volunteer-approval
-    backlog, which is local-only (Monday has no concept of it). Deliberately
-    separate from the Staff Console list: that page is "which case do I
-    open", this one is "how is the team doing overall"."""
+    backlog, which is local-only (Monday has no concept of it)."""
     if _staff_role_check(admin_only=True) is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     all_rows = fetch_monday_data()
     monday_by_item_id = {row['id']: row for row in all_rows}
+    incident_service.sync_local_incidents_from_monday(all_rows)
+    db.session.commit()
 
     pending = incident_service.list_pending_volunteer_requests_by_incident()
     pending_incident_ids = [p['incident_id'] for p in pending]
@@ -1301,8 +1279,13 @@ def staff_incidents_by_status():
     User / Working on it / ...). Deliberately whole-board, not just incidents
     opened through the app: most real incidents are entered by staff straight
     on Monday, so scoping this to app-only incidents would show a queue that
-    doesn't remotely match the tile's own count."""
-    if _staff_role_check(admin_only=True) is None:
+    doesn't remotely match the tile's own count.
+
+    Readable by admin or volunteer (volunteers use the 'Working on it' queue
+    to find an incident to request to join) — the actual triage actions
+    (approve/reject a New Request) stay admin_only on their own routes below,
+    so a volunteer reading the New Request list here just can't act on it."""
+    if _staff_role_check() is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
     from flask import request
@@ -1311,6 +1294,8 @@ def staff_incidents_by_status():
         return jsonify({'success': False, 'message': 'Invalid status.'}), 400
 
     all_rows = fetch_monday_data()
+    incident_service.sync_local_incidents_from_monday(all_rows)
+    db.session.commit()
     matching = [r for r in all_rows if INCIDENT_STATUS_TRANSLATIONS.get((r.get('status_mkmbjwef') or '').strip(), '') == status]
 
     monday_item_ids = [r['id'] for r in matching]
@@ -1336,6 +1321,61 @@ def staff_incidents_by_status():
         })
 
     return jsonify({'success': True, 'status': status, 'incidents': result}), 200
+
+
+@incidents_bp.route('/api/staff/volunteer-dashboard')
+def staff_volunteer_dashboard():
+    """The reduced, read-only dashboard volunteers land on (admins are
+    redirected to /staff/overview instead) — just the three numbers that
+    matter to a volunteer deciding what to do next, not the full pipeline/
+    workload breakdown admins get."""
+    user = _staff_role_check()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    all_rows = fetch_monday_data()
+    incident_service.sync_local_incidents_from_monday(all_rows)
+    db.session.commit()
+
+    status_counts = count_by_incident_status(all_rows)
+    return jsonify({
+        'success': True,
+        'done_count': status_counts.get('Done', 0),
+        'in_progress_count': status_counts.get('Working on it', 0),
+        'my_participated_count': incident_service.count_approved_volunteer_incidents(user.id),
+    }), 200
+
+
+@incidents_bp.route('/api/staff/my-participated-incidents')
+def staff_my_participated_incidents():
+    """Incidents this volunteer has been approved to actively assist —
+    their own history, for the 'Participated' tile on the volunteer
+    dashboard."""
+    user = _staff_role_check()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    local_incidents = incident_service.list_participated_incidents(user.id)
+    monday_rows = {
+        row['id']: row
+        for row in fetch_incidents_by_ids([i.monday_item_id for i in local_incidents])
+    }
+
+    hebrew_type = INCIDENT_TYPE_TRANSLATIONS
+    result = []
+    for inc in local_incidents:
+        row = monday_rows.get(inc.monday_item_id, {})
+        result.append({
+            'local_id': inc.id,
+            'monday_item_id': inc.monday_item_id,
+            'name': row.get('name', ''),
+            'incident_type': hebrew_type.get(row.get('status_mkmb1zc6', ''), row.get('status_mkmb1zc6', '')),
+            'country': row.get('country_mkmb91h3', '') or '',
+            'life_threatening': bool(row.get('check_mkn3c7v8')),
+            'incident_status_en': INCIDENT_STATUS_TRANSLATIONS.get((row.get('status_mkmbjwef') or '').strip(), ''),
+        })
+
+    return jsonify({'success': True, 'incidents': result}), 200
 
 
 @incidents_bp.route('/api/staff/monday-incidents/<monday_item_id>')
@@ -1372,6 +1412,9 @@ def approve_monday_incident(monday_item_id):
     ok, warnings = update_incident(item_id=monday_item_id, fields={'incident_status': 'Working on it'})
     if not ok:
         return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
+
+    incident_service.sync_local_incidents_from_monday([{'id': monday_item_id}])
+    db.session.commit()
     return jsonify({'success': True, 'warnings': warnings}), 200
 
 
@@ -1401,6 +1444,7 @@ def reject_monday_incident(monday_item_id):
     if not ok:
         return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
 
+    incident_service.sync_local_incidents_from_monday([{'id': monday_item_id}])
     incident_service.record_rejection(monday_item_id=monday_item_id, reason=reason, rejected_by_user_id=user.id)
     db.session.commit()
     return jsonify({'success': True, 'warnings': warnings}), 200

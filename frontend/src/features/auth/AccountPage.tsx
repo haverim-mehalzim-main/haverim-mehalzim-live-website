@@ -167,13 +167,15 @@ export default function AccountPage() {
                       <span>→</span>
                     </Link>
                   )}
-                  <Link to="/staff/incidents" className="account-staff-console-link">
-                    <span>
-                      ◈ Staff Console
-                      <span className="account-staff-console-link-sub">View and work incidents</span>
-                    </span>
-                    <span>→</span>
-                  </Link>
+                  {!isAdmin && (
+                    <Link to="/staff/incidents" className="account-staff-console-link">
+                      <span>
+                        ◈ Volunteer Dashboard
+                        <span className="account-staff-console-link-sub">Done, in-progress &amp; your cases</span>
+                      </span>
+                      <span>→</span>
+                    </Link>
+                  )}
                 </div>
               </div>
             )}

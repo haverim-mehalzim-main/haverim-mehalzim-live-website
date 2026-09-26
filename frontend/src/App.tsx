@@ -10,6 +10,7 @@ import StaffIncidentsPage from './features/staff/StaffIncidentsPage';
 import StaffOverviewPage from './features/staff/StaffOverviewPage';
 import StaffIncidentQueuePage from './features/staff/StaffIncidentQueuePage';
 import MondayIncidentDetailPage from './features/staff/MondayIncidentDetailPage';
+import StaffParticipatedIncidentsPage from './features/staff/StaffParticipatedIncidentsPage';
 import DonorImpactPage from './features/donor/DonorImpactPage';
 import PaymentResultPage from './components/PaymentResultPage';
 import SignUpPage from './features/auth/SignUpPage';
@@ -60,7 +61,8 @@ export default function App() {
         <Route path="/staff/incidents" element={<StaffIncidentsPage />} />
         <Route path="/staff/overview"  element={<StaffOverviewPage />} />
         <Route path="/staff/requests" element={<StaffIncidentQueuePage status="New Request by User" title="New Requests Awaiting Approval" triage />} />
-        <Route path="/staff/in-progress" element={<StaffIncidentQueuePage status="Working on it" title="In Progress" />} />
+        <Route path="/staff/in-progress" element={<StaffIncidentQueuePage status="Working on it" title="In Progress" allowVolunteer />} />
+        <Route path="/staff/participated" element={<StaffParticipatedIncidentsPage />} />
         <Route path="/staff/monday/:mondayItemId" element={<MondayIncidentDetailPage />} />
         <Route path="/my-impact/:token" element={<DonorImpactPage />} />
         <Route path="/donate/thanks"    element={<PaymentResultPage variant="thanks" kind="donation" />} />

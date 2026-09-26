@@ -111,14 +111,15 @@ function QueueRow({ incident, triage, onDecided }: {
   );
 }
 
-export default function StaffIncidentQueuePage({ status, title, triage = false }: {
-  status: string; title: string; triage?: boolean;
+export default function StaffIncidentQueuePage({ status, title, triage = false, allowVolunteer = false }: {
+  status: string; title: string; triage?: boolean; allowVolunteer?: boolean;
 }) {
   const { user, loading: authLoading } = useAuth();
   const [incidents, setIncidents] = useState<QueueIncident[] | null>(null);
   const [error, setError] = useState('');
 
   const isAdmin = user?.roles.includes('admin') ?? false;
+  const hasAccess = isAdmin || (allowVolunteer && (user?.roles.includes('volunteer') ?? false));
 
   if (authLoading) {
     return <div style={{ minHeight: '100dvh', background: BG }} />;
@@ -139,12 +140,12 @@ export default function StaffIncidentQueuePage({ status, title, triage = false }
     );
   }
 
-  if (!isAdmin) {
+  if (!hasAccess) {
     return (
       <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: BG2, border: '1px solid rgba(255,77,106,0.2)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
-          <p style={{ fontSize: 13 }}>This page is admin-only.</p>
-          <Link to="/staff/incidents" style={{ fontSize: 11, color: TEAL }}>← Back to Staff Console</Link>
+          <p style={{ fontSize: 13 }}>{allowVolunteer ? "Your account doesn't have staff access." : 'This page is admin-only.'}</p>
+          <Link to="/staff/incidents" style={{ fontSize: 11, color: TEAL }}>← Back to Dashboard</Link>
         </div>
       </div>
     );
@@ -174,7 +175,9 @@ export default function StaffIncidentQueuePage({ status, title, triage = false }
         <div style={{ whiteSpace: 'nowrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Haverim Mehalzim</span>
         </div>
-        <Link to="/staff/overview" style={{ fontSize: 10, color: TEAL, textDecoration: 'none', whiteSpace: 'nowrap' }}>◈ Overview →</Link>
+        <Link to={isAdmin ? '/staff/overview' : '/staff/incidents'} style={{ fontSize: 10, color: TEAL, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          {isAdmin ? '◈ Overview →' : '← Dashboard'}
+        </Link>
       </div>
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '2.5rem 1.5rem 5rem' }}>

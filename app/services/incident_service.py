@@ -177,22 +177,6 @@ def list_pending_volunteer_requests(incident_id: int) -> list[IncidentVolunteer]
     )
 
 
-def count_pending_volunteer_requests(incident_ids: list[int]) -> dict[int, int]:
-    """Pending (not yet approved) volunteer request count per incident, for
-    the staff list view — so a case with someone waiting on approval doesn't
-    go unnoticed just because nobody happened to open its page. One grouped
-    query instead of one per incident."""
-    if not incident_ids:
-        return {}
-    rows = (
-        db.session.query(IncidentVolunteer.incident_id, db.func.count(IncidentVolunteer.id))
-        .filter(IncidentVolunteer.incident_id.in_(incident_ids), IncidentVolunteer.approved_at.is_(None))
-        .group_by(IncidentVolunteer.incident_id)
-        .all()
-    )
-    return {incident_id: count for incident_id, count in rows}
-
-
 def list_pending_volunteer_requests_by_incident() -> list[dict]:
     """The full volunteer-approval backlog for the management overview
     dashboard: one entry per incident with at least one pending request,
@@ -249,3 +233,50 @@ def record_rejection(*, monday_item_id: str, reason: str, rejected_by_user_id: i
 def get_rejection_reason(monday_item_id: str) -> str | None:
     row = IncidentRejection.query.filter_by(monday_item_id=str(monday_item_id)).one_or_none()
     return row.reason if row is not None else None
+
+
+# ── Mirroring the whole Monday board locally ────────────────────────────────
+# Every incident on Monday needs a local Incident row — otherwise a volunteer
+# has no id to attach a join-request to, and "an incident on Monday that can't
+# be approved through the app" (the thing this whole sync exists to prevent)
+# stays possible. Most incidents are entered by staff straight on Monday, so
+# this keeps the local table a mirror of the whole board, not just of
+# incidents opened through the app.
+
+def sync_local_incidents_from_monday(monday_rows: list[dict]) -> int:
+    """Create a shadow Incident row (user_id=None — no caller account, just a
+    Monday item) for every row in monday_rows that doesn't have a local row
+    yet. Does not commit."""
+    monday_ids = {str(row['id']) for row in monday_rows if row.get('id')}
+    if not monday_ids:
+        return 0
+    existing_ids = {
+        row[0] for row in db.session.query(Incident.monday_item_id)
+        .filter(Incident.monday_item_id.in_(monday_ids)).all()
+    }
+    missing_ids = monday_ids - existing_ids
+    for monday_item_id in missing_ids:
+        db.session.add(Incident(user_id=None, monday_item_id=monday_item_id))
+    return len(missing_ids)
+
+
+# ── Volunteers' own participation history ───────────────────────────────────
+
+def list_participated_incidents(user_id: int) -> list[Incident]:
+    """Incidents this volunteer has been approved to actively assist — their
+    own history, regardless of the incident's current status."""
+    return (
+        Incident.query
+        .join(IncidentVolunteer, IncidentVolunteer.incident_id == Incident.id)
+        .filter(IncidentVolunteer.user_id == user_id, IncidentVolunteer.approved_at.isnot(None))
+        .order_by(IncidentVolunteer.approved_at.desc())
+        .all()
+    )
+
+
+def count_approved_volunteer_incidents(user_id: int) -> int:
+    return (
+        IncidentVolunteer.query
+        .filter(IncidentVolunteer.user_id == user_id, IncidentVolunteer.approved_at.isnot(None))
+        .count()
+    )
