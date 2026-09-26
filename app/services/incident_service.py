@@ -13,7 +13,7 @@ import secrets
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer
+from app.models import Incident, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer
 from app.services.account_service import grant_role
 
 
@@ -196,8 +196,10 @@ def count_pending_volunteer_requests(incident_ids: list[int]) -> dict[int, int]:
 def list_pending_volunteer_requests_by_incident() -> list[dict]:
     """The full volunteer-approval backlog for the management overview
     dashboard: one entry per incident with at least one pending request,
-    oldest-waiting-request first, with a count of how many are waiting on
-    that case. A single query, not one per incident."""
+    oldest-waiting-request first, each carrying every individual volunteer
+    still waiting on that case (name/email, not just a count) so the
+    overview page can show who's waiting on what, not just how many. A
+    single query, not one per incident."""
     rows = (
         IncidentVolunteer.query
         .filter(IncidentVolunteer.approved_at.is_(None))
@@ -210,6 +212,40 @@ def list_pending_volunteer_requests_by_incident() -> list[dict]:
             'incident_id': req.incident_id,
             'oldest_requested_at': req.requested_at,
             'count': 0,
+            'requesters': [],
         })
         entry['count'] += 1
+        entry['requesters'].append({
+            'request_id': req.id,
+            'full_name': req.user.full_name if req.user else None,
+            'email': req.user.email if req.user else None,
+            'requested_at': req.requested_at,
+        })
     return sorted(by_incident.values(), key=lambda e: e['oldest_requested_at'])
+
+
+# ── New-request triage: reject reason (Monday has no column for it) ────────
+
+def record_rejection(*, monday_item_id: str, reason: str, rejected_by_user_id: int | None) -> IncidentRejection:
+    """Record (or replace, if this item was rejected before and is being
+    rejected again) the reason an admin gave for declining a 'New Request by
+    User' intake. Monday's own status/case-status columns are the source of
+    truth for the decision itself (see the reject route) — this only holds
+    the reason text, which has no column of its own on the board, so the
+    caller's own incident page can show it. Does not commit."""
+    existing = IncidentRejection.query.filter_by(monday_item_id=str(monday_item_id)).one_or_none()
+    if existing is not None:
+        existing.reason = reason
+        existing.rejected_by_user_id = rejected_by_user_id
+        existing.rejected_at = datetime.now(timezone.utc)
+        return existing
+    rejection = IncidentRejection(
+        monday_item_id=str(monday_item_id), reason=reason, rejected_by_user_id=rejected_by_user_id,
+    )
+    db.session.add(rejection)
+    return rejection
+
+
+def get_rejection_reason(monday_item_id: str) -> str | None:
+    row = IncidentRejection.query.filter_by(monday_item_id=str(monday_item_id)).one_or_none()
+    return row.reason if row is not None else None

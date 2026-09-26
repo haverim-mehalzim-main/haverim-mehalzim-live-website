@@ -105,24 +105,16 @@ def get_countries_of_incidents(incidents_list):
     return countries
 
 
-_PIPELINE_EXCLUDED_STATUSES = {'Live', 'Stuck'}
-
-
 def count_by_incident_status(incidents_list):
     """Pipeline breakdown for the management overview dashboard — how many
     incidents sit in each workflow stage right now. Every real status
     starts at 0 so a stage nobody is currently in still shows up as empty,
-    not missing. 'Live' is excluded — it's functionally identical to
-    'Working on it' everywhere else in the app — and 'Stuck' has been
-    retired from the board entirely."""
-    counts = {
-        label: 0 for label in dict.fromkeys(INCIDENT_STATUS_TRANSLATIONS.values())
-        if label not in _PIPELINE_EXCLUDED_STATUSES
-    }
+    not missing."""
+    counts = {label: 0 for label in dict.fromkeys(INCIDENT_STATUS_TRANSLATIONS.values())}
     for row in incidents_list:
         raw = (row.get('status_mkmbjwef') or '').strip()
         label = INCIDENT_STATUS_TRANSLATIONS.get(raw, raw)
-        if label and label not in _PIPELINE_EXCLUDED_STATUSES:
+        if label:
             counts[label] = counts.get(label, 0) + 1
     return counts
 

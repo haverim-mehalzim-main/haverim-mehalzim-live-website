@@ -54,9 +54,8 @@ GENDER_TRANSLATIONS = {
 INCIDENT_STATUS_TRANSLATIONS = {
     NEW_REQUEST_STATUS: NEW_REQUEST_STATUS,
     'Working on it':    'Working on it',
-    'Live':              'Live',
-    'Stuck':             'Stuck',
     'Done':              'Done',
+    'Rejected':          'Rejected',
 }
 
 # color_mm32c8wh ("Case Stage" — the public/family case-tracker step this

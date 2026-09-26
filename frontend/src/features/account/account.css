@@ -134,6 +134,13 @@
 .account-incident-badge--past      { color: var(--text-muted); background: rgba(255,255,255,0.05); }
 .account-incident-badge--urgent    { color: var(--accent-red); background: var(--accent-red-dim); margin-left: 6px; }
 .account-incident-badge--following { color: var(--accent-blue); background: var(--accent-blue-dim); margin-left: 6px; }
+.account-incident-badge--caller    { color: var(--text-muted); background: rgba(255,255,255,0.05); margin-left: 6px; }
+
+.account-section-caption {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -8px 0 14px;
+}
 
 .account-staff-links {
   display: flex;

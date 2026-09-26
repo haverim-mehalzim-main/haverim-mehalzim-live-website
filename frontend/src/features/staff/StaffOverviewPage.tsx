@@ -9,6 +9,13 @@ const TEAL = '#00c9b1';
 const AMBER = '#ffb930';
 const RED = '#f87171';
 
+interface VolunteerRequester {
+  request_id: number;
+  full_name: string | null;
+  email: string | null;
+  requested_at: string;
+}
+
 interface OverviewData {
   total_incidents: number;
   incident_status_counts: Record<string, number>;
@@ -16,13 +23,24 @@ interface OverviewData {
   manager_workload: [string, number][];
   supervisor_workload: [string, number][];
   pending_volunteer_total: number;
-  pending_volunteer_incidents: { incident_id: number; incident_name: string; count: number; oldest_requested_at: string }[];
+  pending_volunteer_incidents: {
+    incident_id: number; incident_name: string; count: number; oldest_requested_at: string;
+    requesters: VolunteerRequester[];
+  }[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
   'New Request by User': TEAL,
   'Working on it': AMBER,
   'Done': 'rgba(255,255,255,0.35)',
+  'Rejected': RED,
+};
+
+// Pipeline stages an admin can click through to a full triage/working queue
+// for — the rest (Done, Rejected) are just informational counts.
+const STATUS_LINKS: Record<string, string> = {
+  'New Request by User': '/staff/requests',
+  'Working on it': '/staff/in-progress',
 };
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -134,15 +152,23 @@ export default function StaffOverviewPage() {
             <div style={{ marginBottom: '2.5rem' }}>
               <SectionTitle>Pipeline ({data.total_incidents} total on the board)</SectionTitle>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {Object.entries(data.incident_status_counts).map(([status, count]) => (
-                  <div key={status} style={{
+                {Object.entries(data.incident_status_counts).map(([status, count]) => {
+                  const tileStyle: React.CSSProperties = {
                     flex: '1 1 100px', background: BG2, border: `1px solid ${STATUS_COLORS[status] ?? 'rgba(255,255,255,0.1)'}44`,
-                    borderRadius: 10, padding: '14px 12px', textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: STATUS_COLORS[status] ?? '#e2e8f0' }}>{count}</div>
-                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: '0.04em' }}>{status}</div>
-                  </div>
-                ))}
+                    borderRadius: 10, padding: '14px 12px', textAlign: 'center', textDecoration: 'none', display: 'block',
+                  };
+                  const inner = (
+                    <>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: STATUS_COLORS[status] ?? '#e2e8f0' }}>{count}</div>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: '0.04em' }}>{status}</div>
+                    </>
+                  );
+                  return STATUS_LINKS[status] ? (
+                    <Link key={status} to={STATUS_LINKS[status]} style={tileStyle}>{inner}</Link>
+                  ) : (
+                    <div key={status} style={tileStyle}>{inner}</div>
+                  );
+                })}
               </div>
             </div>
 
@@ -166,18 +192,28 @@ export default function StaffOverviewPage() {
               ) : (
                 <div style={{ background: BG2, border: '1px solid rgba(255,185,48,0.25)', borderRadius: 10, padding: '0.5rem 1.25rem' }}>
                   {data.pending_volunteer_incidents.map(p => (
-                    <Link
-                      key={p.incident_id} to={`/incidents/${p.incident_id}`}
-                      style={{
-                        display: 'flex', justifyContent: 'space-between', padding: '10px 0',
-                        borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12, textDecoration: 'none', color: 'inherit',
-                      }}
-                    >
-                      <span style={{ color: '#e2e8f0', fontWeight: 700 }}>{p.incident_name}</span>
-                      <span style={{ color: AMBER }}>
-                        {p.count} waiting · oldest {timeAgo(p.oldest_requested_at)}
-                      </span>
-                    </Link>
+                    <div key={p.incident_id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <Link
+                        to={`/incidents/${p.incident_id}`}
+                        style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <span style={{ color: '#e2e8f0', fontWeight: 700 }}>{p.incident_name}</span>
+                        <span style={{ color: AMBER }}>
+                          {p.count} waiting · oldest {timeAgo(p.oldest_requested_at)}
+                        </span>
+                      </Link>
+                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {p.requesters.map(r => (
+                          <Link
+                            key={r.request_id} to={`/incidents/${p.incident_id}`}
+                            style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, textDecoration: 'none', color: 'rgba(255,255,255,0.5)', paddingLeft: 10 }}
+                          >
+                            <span>↳ {r.full_name || 'Unknown'} · {r.email}</span>
+                            <span>{timeAgo(r.requested_at)}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

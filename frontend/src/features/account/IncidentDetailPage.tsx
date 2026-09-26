@@ -49,6 +49,9 @@ interface IncidentDetail {
   closure_summary?: string;
   closure_lessons?: string;
   closure_locating_point?: string;
+  // Set only when incident_status_en is 'Rejected' — the reason an admin
+  // gave for declining this request at intake.
+  rejection_reason?: string | null;
 }
 
 interface IncidentFieldOptions {
@@ -926,6 +929,15 @@ export default function IncidentDetailPage() {
           <Link to={backLink} className="account-back">{backLabel}</Link>
           <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
         </nav>
+
+        {relation === 'owner' && inc.incident_status_en === 'Rejected' && (
+          <div className="account-card" style={{ borderColor: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
+            <div className="account-detail-desc-label" style={{ color: 'var(--accent-red)' }}>This request was declined</div>
+            <p className="account-detail-desc-text">
+              {inc.rejection_reason || 'Our team decided not to open a case for this request.'}
+            </p>
+          </div>
+        )}
 
         <div className="account-card">
           <div className="account-incident-top">

@@ -152,3 +152,26 @@ class IncidentVolunteer(db.Model):
 
     def __repr__(self):
         return f"<IncidentVolunteer incident_id={self.incident_id} user_id={self.user_id} approved={self.approved_at is not None}>"
+
+
+class IncidentRejection(db.Model):
+    """The reason an admin gave when declining a 'New Request by User' intake
+    — keyed by Monday item id directly, not Incident.id, because most board
+    incidents (entered by staff straight on Monday) have no local Incident
+    row at all. Monday's own status/case-status columns are the source of
+    truth for the decision itself (see staff reject-incident route); this
+    table only holds the reason text, which has no column of its own on the
+    board, so the caller's own incident page (when one exists) can show it."""
+
+    __tablename__ = "incident_rejections"
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    monday_item_id = db.Column(db.Text, nullable=False, unique=True)
+    reason = db.Column(db.Text, nullable=False)
+    rejected_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    rejected_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+
+    rejected_by = db.relationship("User")
+
+    def __repr__(self):
+        return f"<IncidentRejection monday_item_id={self.monday_item_id!r}>"

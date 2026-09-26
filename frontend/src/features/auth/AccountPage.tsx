@@ -33,8 +33,10 @@ function IncidentCard({ incident, ongoing }: { incident: IncidentSummary; ongoin
             {ongoing ? 'Ongoing' : 'Resolved'}
           </span>
           {incident.life_threatening && <span className="account-incident-badge account-incident-badge--urgent">Urgent</span>}
-          {incident.relation === 'follower' && (
+          {incident.relation === 'follower' ? (
             <span className="account-incident-badge account-incident-badge--following">💙 Following</span>
+          ) : (
+            <span className="account-incident-badge account-incident-badge--caller">📞 You're the caller</span>
           )}
         </div>
       </div>
@@ -196,6 +198,9 @@ export default function AccountPage() {
                 <div className="account-section-title">◈ Ongoing Cases</div>
                 <Link to="/account/open-call" className="account-open-call-btn">🆘 Open a Call</Link>
               </div>
+              <p className="account-section-caption">
+                Cases you opened yourself are marked 📞 You're the caller · cases you're following for a family member or friend are marked 💙 Following
+              </p>
               {!incidentsLoaded ? (
                 <div className="account-empty">Loading…</div>
               ) : ongoing.length === 0 ? (

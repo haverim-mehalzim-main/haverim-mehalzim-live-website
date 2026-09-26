@@ -739,6 +739,76 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         'closure_summary': row.get('long_text_mknd9c64', '') or '',
         'closure_lessons': row.get('long_text_mm31t5ky', '') or '',
         'closure_locating_point': row.get('text_mkmbref6', '') or '',
+
+        # Set only if this item was ever declined at intake (see the reject
+        # route) — the caller's own incident page shows it when
+        # incident_status_en is 'Rejected'; harmless (unused) otherwise.
+        'rejection_reason': incident_service.get_rejection_reason(local_incident.monday_item_id),
+    }
+
+
+def _serialize_monday_only_incident(row: dict) -> dict:
+    """Same extended case-detail shape as _serialize_incident, for a board
+    item with no local Incident row at all (the overwhelming majority — most
+    incidents are entered by staff straight on Monday, never through this
+    app). No owner, no local-override fields (city/phone/description come
+    straight from Monday, unedited by any caller here), no local id."""
+    hebrew_type = row.get('status_mkmb1zc6', '')
+    status_label = row.get('color_mkvvrm1r', '')
+    incident_status = row.get('status_mkmbjwef', '') or ''
+    case_stage = row.get('color_mm32c8wh', '') or ''
+    insurance = row.get('color_mkmbwnzy', '') or ''
+    combat_service = row.get('single_selectynfloxz', '') or ''
+    call_source = row.get('color_mkmbpyxw', '') or ''
+    ccc_official = row.get('color_mkmbwakp', '') or ''
+    incident_manager = row.get('status_mkmb9hbk', '') or ''
+    supervisor = row.get('status_mkmb6bm2', '') or ''
+    country_name = row.get('country_mkmb91h3', '') or ''
+    hebrew_gender = row.get('color_mkngmw3', '')
+
+    return {
+        'id': None,
+        'monday_item_id': row.get('id'),
+        'name': row.get('name', ''),
+        'patient_name': row.get('name', ''),
+        'patient_age': row.get('numeric_mkng2emx', ''),
+        'patient_gender': GENDER_TRANSLATIONS.get(hebrew_gender, hebrew_gender),
+        'patient_phone': row.get('phone_mkz3dr0y', ''),
+        'filer_info': row.get('text_mkz3yv22', ''),
+        'incident_type': INCIDENT_TYPE_TRANSLATIONS.get(hebrew_type, hebrew_type),
+        'city': '',
+        'country': country_name,
+        'country_code': _COUNTRY_CODE_BY_NAME.get(country_name, ''),
+        'location': country_name,
+        'description': row.get('long_text_mkpfvmh3', '') or '',
+        'life_threatening': bool(row.get('check_mkn3c7v8')),
+        'status_label': status_label,
+        'status_label_en': STATUS_TRANSLATIONS.get(status_label, ''),
+        'handled': status_label in HANDLED_STATUSES,
+        'found_on_monday': True,
+
+        'incident_status': incident_status,
+        'incident_status_en': INCIDENT_STATUS_TRANSLATIONS.get(incident_status, ''),
+        'case_stage': case_stage,
+        'case_stage_en': CASE_STAGE_TRANSLATIONS.get(case_stage, ''),
+        'insurance': insurance,
+        'insurance_en': INSURANCE_TRANSLATIONS.get(insurance, ''),
+        'combat_service': combat_service,
+        'combat_service_en': COMBAT_SERVICE_TRANSLATIONS.get(combat_service, ''),
+        'call_source': call_source,
+        'call_source_en': CALL_SOURCE_TRANSLATIONS.get(call_source, ''),
+        'ccc_official': ccc_official,
+        'ccc_official_en': CCC_OFFICIAL_TRANSLATIONS.get(ccc_official, ''),
+        'incident_manager': incident_manager,
+        'incident_manager_en': INCIDENT_MANAGER_TRANSLATIONS.get(incident_manager, ''),
+        'supervisor': supervisor,
+        'supervisor_en': SUPERVISOR_TRANSLATIONS.get(supervisor, ''),
+        'in_request_at': row.get('text_mkmbt7j5', '') or '',
+        'closed_at': row.get('text_mm435fh9', '') or '',
+        'closure_summary': row.get('long_text_mknd9c64', '') or '',
+        'closure_lessons': row.get('long_text_mm31t5ky', '') or '',
+        'closure_locating_point': row.get('text_mkmbref6', '') or '',
+        'rejection_reason': incident_service.get_rejection_reason(row.get('id')),
     }
 
 
@@ -1201,6 +1271,15 @@ def staff_overview():
             'incident_name': (monday_row.get('name') if monday_row else None) or f"Incident #{p['incident_id']}",
             'count': p['count'],
             'oldest_requested_at': p['oldest_requested_at'].isoformat(),
+            'requesters': [
+                {
+                    'request_id': r['request_id'],
+                    'full_name': r['full_name'],
+                    'email': r['email'],
+                    'requested_at': r['requested_at'].isoformat(),
+                }
+                for r in p['requesters']
+            ],
         })
 
     return jsonify({
@@ -1213,6 +1292,118 @@ def staff_overview():
         'pending_volunteer_total': sum(p['count'] for p in pending),
         'pending_volunteer_incidents': pending_out,
     }), 200
+
+
+@incidents_bp.route('/api/staff/incidents-by-status')
+def staff_incidents_by_status():
+    """The full board's worth of incidents in one workflow stage — behind
+    the clickable pipeline tiles on the management overview (New Request by
+    User / Working on it / ...). Deliberately whole-board, not just incidents
+    opened through the app: most real incidents are entered by staff straight
+    on Monday, so scoping this to app-only incidents would show a queue that
+    doesn't remotely match the tile's own count."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    from flask import request
+    status = (request.args.get('status') or '').strip()
+    if status not in INCIDENT_STATUS_TRANSLATIONS.values():
+        return jsonify({'success': False, 'message': 'Invalid status.'}), 400
+
+    all_rows = fetch_monday_data()
+    matching = [r for r in all_rows if INCIDENT_STATUS_TRANSLATIONS.get((r.get('status_mkmbjwef') or '').strip(), '') == status]
+
+    monday_item_ids = [r['id'] for r in matching]
+    local_by_monday_id = {
+        inc.monday_item_id: inc for inc in Incident.query.filter(Incident.monday_item_id.in_(monday_item_ids)).all()
+    } if monday_item_ids else {}
+
+    hebrew_type = INCIDENT_TYPE_TRANSLATIONS
+    result = []
+    for row in matching:
+        local_incident = local_by_monday_id.get(row['id'])
+        result.append({
+            'monday_item_id': row['id'],
+            'local_id': local_incident.id if local_incident else None,
+            'name': row.get('name', ''),
+            'incident_type': hebrew_type.get(row.get('status_mkmb1zc6', ''), row.get('status_mkmb1zc6', '')),
+            'country': row.get('country_mkmb91h3', '') or '',
+            'life_threatening': bool(row.get('check_mkn3c7v8')),
+            'owner': (
+                {'email': local_incident.user.email, 'full_name': local_incident.user.full_name}
+                if local_incident and local_incident.user else None
+            ),
+        })
+
+    return jsonify({'success': True, 'status': status, 'incidents': result}), 200
+
+
+@incidents_bp.route('/api/staff/monday-incidents/<monday_item_id>')
+def staff_monday_incident_detail(monday_item_id):
+    """Read view for a board incident with no local Incident row (the
+    common case) — same extended case-detail fields as the app-opened
+    incident page, but no task journey / edit form / closure form, since
+    those are all tied to the app's own local ownership model, not
+    something a Monday-only item has any use for here."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    rows = fetch_incidents_by_ids([monday_item_id])
+    if not rows:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    local_incident = Incident.query.filter_by(monday_item_id=str(monday_item_id)).one_or_none()
+    return jsonify({
+        'success': True,
+        'local_id': local_incident.id if local_incident else None,
+        'incident': _serialize_monday_only_incident(rows[0]),
+    }), 200
+
+
+@incidents_bp.route('/api/staff/monday-incidents/<monday_item_id>/approve', methods=['POST'])
+def approve_monday_incident(monday_item_id):
+    """Accept a 'New Request by User' intake and start active work on it —
+    just a status write-through to Monday, the same as any other case-detail
+    edit; nothing local to update, since approval isn't caller-facing the
+    way a rejection reason is."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    ok, warnings = update_incident(item_id=monday_item_id, fields={'incident_status': 'Working on it'})
+    if not ok:
+        return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
+    return jsonify({'success': True, 'warnings': warnings}), 200
+
+
+@incidents_bp.route('/api/staff/monday-incidents/<monday_item_id>/reject', methods=['POST'])
+def reject_monday_incident(monday_item_id):
+    """Decline a 'New Request by User' intake, with a reason the caller (if
+    this incident was opened through the app) sees on their own incident
+    page. Writes both Monday status columns straight through (status_mkmbjwef
+    -> 'Rejected', color_mkvvrm1r -> 'Decided Not To Open' — the label the
+    org already uses for 'CHAMAL decided not to open an incident'), and keeps
+    the reason text locally since Monday has no column for it."""
+    from flask import request
+
+    user = _staff_role_check(admin_only=True)
+    if user is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    body = request.get_json(silent=True) or {}
+    reason = str(body.get('reason', '')).strip()[:2000]
+    if not reason:
+        return jsonify({'success': False, 'message': 'Please provide a reason for rejecting this request.'}), 400
+
+    ok, warnings = update_incident(
+        item_id=monday_item_id,
+        fields={'incident_status': 'Rejected', 'status_label': 'Decided Not To Open'},
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
+
+    incident_service.record_rejection(monday_item_id=monday_item_id, reason=reason, rejected_by_user_id=user.id)
+    db.session.commit()
+    return jsonify({'success': True, 'warnings': warnings}), 200
 
 
 _LABEL_FIELD_VALIDATORS = {
