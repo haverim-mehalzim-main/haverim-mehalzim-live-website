@@ -117,7 +117,7 @@ export default function StaffAdminDashboardPage() {
   }
 
   if (data === null) {
-    fetch('/api/staff/overview')
+    fetch('/api/staff/admin-dashboard')
       .then(r => {
         if (r.status === 403) { setError('Forbidden'); return null; }
         return r.json();

@@ -1221,8 +1221,8 @@ def my_donations():
 # endpoints still use — this surface is used by volunteer accounts too, not
 # just admins, so a shared secret token was never the right fit for it.
 
-@incidents_bp.route('/api/staff/overview')
-def staff_overview():
+@incidents_bp.route('/api/staff/admin-dashboard')
+def staff_admin_dashboard():
     """Admin-only management dashboard: workload and pipeline across the
     whole Monday.com board (not just incidents opened through the app —
     those are a small fraction of real cases), plus the volunteer-approval
