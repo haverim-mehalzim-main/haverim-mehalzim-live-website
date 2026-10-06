@@ -7,7 +7,10 @@
    own console theme (features/staff/staff.css). */
 
 .auth-page,
-.account-page {
+.account-page,
+.premium-page,
+.pay-page,
+.donor-page {
   --bg-void: #fbf8f3;
   --bg-surface: #f4efe6;
   --bg-card: #ffffff;
@@ -160,3 +163,80 @@
 .auth-page .account-premium-card,
 .account-page .account-premium-card { border-radius: 16px; border-color: #ecd6a4; }
 .auth-page .account-premium-title { font-size: 15px; }
+
+/* ── Premium membership ─────────────────────────────────────────────────── */
+.premium-page { min-height: 100vh; }
+.premium-page .premium-nav { border-bottom: none; padding: 20px 0 8px; margin-bottom: 20px; }
+.premium-page .premium-back { font-family: var(--font-display); font-size: 14px; letter-spacing: 0; color: var(--text-secondary); }
+.premium-page .premium-back:hover { color: var(--accent-amber); }
+.premium-page .premium-nav-brand { font-weight: 600; letter-spacing: 0; color: var(--text-primary); }
+.premium-page .premium-nav-brand-dot { box-shadow: none; }
+.premium-page .premium-eyebrow { font-family: var(--font-display); font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.premium-page .premium-title { font-size: 28px; font-weight: 600; letter-spacing: -0.015em; }
+.premium-page .premium-sub { font-size: 15px; }
+.premium-page .premium-card {
+  border-radius: 20px; border-color: var(--border-dim); padding: 28px;
+  box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 8px 24px rgba(60, 50, 30, 0.05);
+}
+.premium-page .premium-price { font-weight: 600; font-size: 44px; letter-spacing: -0.02em; }
+.premium-page .premium-price-sub { font-family: var(--font-display); font-size: 13px; letter-spacing: 0; text-transform: none; }
+.premium-page .premium-currency-toggle { background: #f1ebde; border-color: var(--border-mid); border-radius: 999px; }
+.premium-page .premium-cur-btn { border-radius: 999px; font-weight: 600; font-size: 13px; }
+.premium-page .premium-cur-btn.active { background: var(--accent-amber); color: #ffffff; }
+.premium-page .premium-benefits li { font-size: 15px; }
+.premium-page .premium-input {
+  font-family: var(--font-display); font-size: 16px; padding: 13px 14px; border-radius: 12px; background: #ffffff;
+}
+.premium-page .premium-input:focus { border-color: var(--accent-amber); box-shadow: 0 0 0 3px var(--accent-amber-dim); }
+.premium-page .premium-submit {
+  padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; background: var(--accent-amber); color: #ffffff;
+}
+.premium-page .premium-error { font-family: var(--font-display); font-size: 14px; }
+.premium-page .premium-secure { font-size: 13px; }
+
+/* ── Payment result (donation and premium, thanks and failed) ───────────── */
+.pay-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; font-family: var(--font-display); }
+.pay-card {
+  --tone: var(--accent-teal); --tone-soft: var(--accent-teal-dim);
+  max-width: 460px; width: 100%; text-align: center; padding: 40px 28px 32px;
+  background: var(--bg-card); border: 1px solid var(--border-dim); border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 16px 40px rgba(60, 50, 30, 0.07);
+}
+.pay-card[data-tone='amber'] { --tone: var(--accent-amber); --tone-soft: var(--accent-amber-dim); }
+.pay-card[data-tone='red'] { --tone: var(--accent-red); --tone-soft: var(--accent-red-dim); }
+.pay-icon {
+  width: 68px; height: 68px; margin: 0 auto 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--tone-soft); color: var(--tone); font-size: 30px; line-height: 1;
+}
+.pay-title { font-size: 24px; font-weight: 600; letter-spacing: -0.015em; margin-bottom: 10px; color: var(--text-primary); }
+.pay-body { font-size: 15px; color: var(--text-secondary); margin-bottom: 26px; }
+.pay-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.pay-btn {
+  padding: 12px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; text-decoration: none;
+  background: var(--tone); color: #ffffff; border: 1px solid var(--tone);
+}
+.pay-btn--ghost { background: transparent; color: var(--text-primary); border-color: var(--border-mid); }
+.pay-btn--ghost:hover { background: var(--bg-surface); }
+
+/* ── Donor impact report ────────────────────────────────────────────────── */
+.donor-page::before { display: none; }
+.donor-page { --gold: #8a6500; font-family: var(--font-display); }
+.donor-page .donor-nav { border-bottom: none; padding: 20px 0 8px; margin-bottom: 28px; }
+.donor-page .donor-back { font-family: var(--font-display); font-size: 14px; letter-spacing: 0; color: var(--text-secondary); }
+.donor-page .donor-nav-brand { font-weight: 600; letter-spacing: 0; color: var(--text-primary); }
+.donor-page .donor-nav-brand-dot { box-shadow: none; }
+.donor-page .donor-hero-eyebrow, .donor-page .donor-kpi-label, .donor-page .donor-note-label {
+  font-family: var(--font-display); text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500;
+}
+.donor-page .donor-kpi-card,
+.donor-page .donor-note,
+.donor-page .donor-cta { box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 8px 24px rgba(60, 50, 30, 0.05); }
+.donor-page .donor-kpi-card.gold .donor-kpi-value,
+.donor-page .donor-window-num.gold { color: var(--gold); }
+.donor-page .donor-kpi-card.gold { border-color: #ecd6a4; background: #fffaf0; }
+.donor-page .donor-kpi-card.teal { background: #f3faf7; }
+.donor-page .donor-note { background: #fffaf0; border-color: #ecd6a4; }
+.donor-page .donor-note-label { color: var(--gold); }
+.donor-page .donor-cta { background: #f3faf7; }
+.donor-page .donor-cta-donate { color: #ffffff; }
+.donor-page .donor-timeline-dot.teal, .donor-page .donor-timeline-dot.amber { box-shadow: none; }

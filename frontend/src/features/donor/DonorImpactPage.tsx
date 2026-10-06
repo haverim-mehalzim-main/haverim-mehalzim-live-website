@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDonate } from '../../context/DonateContext';
 import './donor.css';
+import '../account/people.css';
 
 const DONATE_URL     = 'https://www.jgive.com/new/en/usd/donation-targets/110214';
 const AVG_MISSION_COST = 150;
@@ -104,7 +105,7 @@ export default function DonorImpactPage() {
     <div className="donor-page">
       <div className="donor-page-wrapper">
         <nav className="donor-nav">
-          <Link to="/" className="donor-back">← Back to Dashboard</Link>
+          <Link to="/" className="donor-back">← Back to the site</Link>
           <div className="donor-nav-brand">
             <span className="donor-nav-brand-dot" />
             Haverim Mehalzim
@@ -118,7 +119,7 @@ export default function DonorImpactPage() {
               ? "We couldn't find a donor impact page for this code. Please check your link, or contact us if you believe this is an error."
               : "We couldn't load your impact data right now. Please try again in a moment."}
           </p>
-          <Link to="/" className="donor-home-btn">View Our Operations →</Link>
+          <Link to="/" className="donor-home-btn">See our operations →</Link>
         </div>
       </div>
     </div>
@@ -136,7 +137,7 @@ export default function DonorImpactPage() {
 
         {/* Nav */}
         <nav className="donor-nav">
-          <Link to="/" className="donor-back">← Back to Dashboard</Link>
+          <Link to="/" className="donor-back">← Back to the site</Link>
           <div className="donor-nav-brand">
             <span className="donor-nav-brand-dot" />
             Haverim Mehalzim
@@ -145,7 +146,7 @@ export default function DonorImpactPage() {
 
         {/* Hero */}
         <div className="donor-hero">
-          <div className="donor-hero-eyebrow">◈ Personal Impact Report</div>
+          <div className="donor-hero-eyebrow">Your personal impact report</div>
           <h1 className="donor-hero-name">
             Welcome back,<br />
             <span className="donor-hero-name-highlight">{d.name}</span>
@@ -178,13 +179,13 @@ export default function DonorImpactPage() {
             <div className="donor-kpi-value">
               <span>$</span><CountUp to={Math.round(d.total_donated)} />
             </div>
-            <div className="donor-kpi-label">Total Donated</div>
+            <div className="donor-kpi-label">Total donated</div>
           </div>
           <div className="donor-kpi-card teal">
             <div className="donor-kpi-value">
               <CountUp to={d.missions_funded} />
             </div>
-            <div className="donor-kpi-label">Missions Funded</div>
+            <div className="donor-kpi-label">Missions funded</div>
             <div className="donor-kpi-sub">${AVG_MISSION_COST} per mission</div>
           </div>
           {d.first_donation_date && (
@@ -193,14 +194,14 @@ export default function DonorImpactPage() {
                 <div className="donor-kpi-value">
                   <CountUp to={d.handled_since} />
                 </div>
-                <div className="donor-kpi-label">Cases Managed</div>
+                <div className="donor-kpi-label">Cases managed</div>
                 <div className="donor-kpi-sub">since your first gift</div>
               </div>
               <div className="donor-kpi-card gold">
                 <div className="donor-kpi-value">
                   <CountUp to={d.lives_saved_since} />
                 </div>
-                <div className="donor-kpi-label">Life-Threatening Cases</div>
+                <div className="donor-kpi-label">Life-threatening cases</div>
                 <div className="donor-kpi-sub">stabilized in your window</div>
               </div>
             </>
@@ -210,7 +211,7 @@ export default function DonorImpactPage() {
         {/* Impact window — only shown when first_donation_date is known */}
         {d.first_donation_date && <div className="donor-window">
           <div className="donor-window-header">
-            <div className="donor-window-eyebrow">◈ Your Impact Window</div>
+            <div className="donor-window-eyebrow">Your impact window</div>
             <div className="donor-window-period">{months} month{months !== 1 ? 's' : ''} of operations</div>
           </div>
 
@@ -219,7 +220,7 @@ export default function DonorImpactPage() {
             <div className="donor-timeline-start-block">
               <div className="donor-timeline-dot teal" />
               <div className="donor-timeline-date">{formatDate(d.first_donation_date)}</div>
-              <div className="donor-timeline-label">First Gift</div>
+              <div className="donor-timeline-label">First gift</div>
             </div>
             <div className="donor-timeline-track">
               <div className="donor-timeline-fill" />
@@ -272,7 +273,7 @@ export default function DonorImpactPage() {
               to={`/leaderboard?you=${encodeURIComponent(firstName)}`}
               className="donor-cta-share"
             >
-              ◈ See Leaderboard
+              See Leaderboard
             </Link> */}
             <button
               className={`donor-cta-share${copied ? ' copied' : ''}`}

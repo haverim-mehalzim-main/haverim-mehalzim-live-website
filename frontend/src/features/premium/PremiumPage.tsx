@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './premium.css';
+import '../account/people.css';
 
 type Currency = 'USD' | 'ILS';
 const USD_TO_ILS_FALLBACK = 3.7;
@@ -74,7 +75,7 @@ export default function PremiumPage() {
     <div className="premium-page">
       <div className="premium-wrapper">
         <nav className="premium-nav">
-          <Link to="/" className="premium-back">← Back to Dashboard</Link>
+          <Link to="/" className="premium-back">← Back to the site</Link>
           <div className="premium-nav-brand">
             <span className="premium-nav-brand-dot" />
             Haverim Mehalzim
@@ -82,7 +83,7 @@ export default function PremiumPage() {
         </nav>
 
         <div className="premium-hero">
-          <div className="premium-eyebrow">★ Premium Membership</div>
+          <div className="premium-eyebrow">Premium membership</div>
           <h1 className="premium-title">Priority access, whenever you need it.</h1>
           <p className="premium-sub">
             A one-time contribution that unlocks permanent premium status — starting with
@@ -98,7 +99,7 @@ export default function PremiumPage() {
               Thank you for your support — your premium status is active and permanent.
             </p>
             <Link to="/account" className="premium-submit" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              View My Account
+              View your account
             </Link>
           </div>
         ) : (
@@ -107,7 +108,7 @@ export default function PremiumPage() {
               <div className="premium-price">
                 {displayPrice == null ? '—' : `${symbol}${displayPrice.toLocaleString()}`}
               </div>
-              <div className="premium-price-sub">ONE-TIME · LIFETIME STATUS</div>
+              <div className="premium-price-sub">One-time payment · lifetime status</div>
               <div className="premium-currency-toggle">
                 {(['USD', 'ILS'] as Currency[]).map(c => (
                   <button
