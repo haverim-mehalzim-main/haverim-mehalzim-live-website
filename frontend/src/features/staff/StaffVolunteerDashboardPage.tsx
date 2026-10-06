@@ -34,8 +34,8 @@ export default function StaffVolunteerDashboardPage() {
   const [data, setData] = useState<VolunteerDashboardData | null>(null);
   const [error, setError] = useState('');
 
-  const isAdmin     = user?.roles.includes('admin') ?? false;
-  const isVolunteer = user?.roles.includes('volunteer') ?? false;
+  const isAdmin     = user?.primary_role === 'admin';
+  const isVolunteer = user?.primary_role === 'volunteer';
   const hasAccess   = isAdmin || isVolunteer;
 
   useEffect(() => {

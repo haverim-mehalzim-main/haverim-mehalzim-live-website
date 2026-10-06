@@ -49,7 +49,7 @@ export default function StaffParticipatedIncidentsPage() {
   const [incidents, setIncidents] = useState<ParticipatedIncident[] | null>(null);
   const [error, setError] = useState('');
 
-  const hasAccess = (user?.roles.includes('admin') || user?.roles.includes('volunteer')) ?? false;
+  const hasAccess = user?.primary_role === 'admin' || user?.primary_role === 'volunteer';
 
   if (authLoading) {
     return <div style={{ minHeight: '100dvh', background: BG }} />;

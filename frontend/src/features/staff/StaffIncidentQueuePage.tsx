@@ -118,8 +118,8 @@ export default function StaffIncidentQueuePage({ status, title, triage = false, 
   const [incidents, setIncidents] = useState<QueueIncident[] | null>(null);
   const [error, setError] = useState('');
 
-  const isAdmin = user?.roles.includes('admin') ?? false;
-  const hasAccess = isAdmin || (allowVolunteer && (user?.roles.includes('volunteer') ?? false));
+  const isAdmin = user?.primary_role === 'admin';
+  const hasAccess = isAdmin || (allowVolunteer && user?.primary_role === 'volunteer');
 
   if (authLoading) {
     return <div style={{ minHeight: '100dvh', background: BG }} />;

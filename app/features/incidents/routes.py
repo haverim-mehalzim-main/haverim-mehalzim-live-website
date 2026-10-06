@@ -1062,9 +1062,13 @@ def incident_detail(local_id):
       volunteer, not (yet) approved — a reduced preview (real operational
                  context, no raw contact info, no task list) plus whether
                  they've already asked to join
-    Precedence is personal relation to *this* incident first (owner/follower),
-    then role-based staff access — an admin who also happens to be this
-    incident's own caller sees their own-case view, not the ops view.
+    Which view a user gets follows their highest role (admin > volunteer >
+    caller > family, see account_service.ROLE_RANKING), with one safeguard: a
+    role can never take away access to your own case. So admin always gets
+    the admin view (even on their own call — `is_owner` tells the page to
+    keep the owner-only share link); a volunteer who opened this incident
+    keeps the owner view (richer than the volunteer preview); and a volunteer
+    who merely follows it gets the volunteer view, not the family one.
     """
     user = current_user()
     if user is None:
@@ -1074,14 +1078,15 @@ def incident_detail(local_id):
     if incident is None:
         return jsonify({'success': False, 'message': 'Not found'}), 404
 
-    if incident.user_id == user.id:
-        relation = 'owner'
-    elif IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None:
-        relation = 'follower'
-    elif user_has_role(user, 'admin'):
+    is_owner = incident.user_id == user.id
+    if user_has_role(user, 'admin'):
         relation = 'admin'
+    elif is_owner:
+        relation = 'owner'
     elif user_has_role(user, 'volunteer'):
         relation = 'volunteer'
+    elif IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None:
+        relation = 'follower'
     else:
         return jsonify({'success': False, 'message': 'Not found'}), 404
 
@@ -1116,6 +1121,7 @@ def incident_detail(local_id):
         return jsonify({
             'success': True,
             'relation': relation,
+            'is_owner': is_owner,
             'incident': serialized,
             'tasks': [_serialize_task(t) for t in tasks],
             'volunteer_requests': [_serialize_volunteer_request(r) for r in pending],

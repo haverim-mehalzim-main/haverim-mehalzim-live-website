@@ -48,7 +48,12 @@ function IncidentCard({ incident, ongoing }: { incident: IncidentSummary; ongoin
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  volunteer: 'Volunteer',
+  client: 'Caller',
   family: 'Family/Friend',
+  donor: 'Donor',
+  premium: 'Premium',
 };
 
 function DonationCard({ donation }: { donation: DonationSummary }) {
@@ -89,9 +94,15 @@ export default function AccountPage() {
   const [donations, setDonations] = useState<DonationSummary[]>([]);
   const [donationsLoaded, setDonationsLoaded] = useState(false);
 
-  const isAdmin = user?.roles.includes('admin') ?? false;
-  const isStaff = isAdmin || (user?.roles.includes('volunteer') ?? false);
+  const isAdmin = user?.primary_role === 'admin';
+  const isStaff = isAdmin || user?.primary_role === 'volunteer';
   const isDonor = user?.roles.includes('donor');
+  // One access-level badge (the highest role) plus donor/premium, which are
+  // extra attributes rather than levels — not every role the account holds.
+  const badgeRoles: string[] = [
+    ...(user?.primary_role ? [user.primary_role] : []),
+    ...(user?.roles ?? []).filter(role => role === 'donor' || role === 'premium'),
+  ];
 
   useEffect(() => {
     if (!user) return;
@@ -143,9 +154,9 @@ export default function AccountPage() {
               <div className="auth-eyebrow">◈ My Account</div>
               <h1 className="auth-title">{user.full_name}</h1>
               <p className="auth-sub">{user.email}</p>
-              {user.roles.length > 0 && (
+              {badgeRoles.length > 0 && (
                 <div className="auth-roles">
-                  {user.roles.map(role => (
+                  {badgeRoles.map(role => (
                     <span key={role} className="auth-role-badge">{ROLE_LABELS[role] ?? role}</span>
                   ))}
                 </div>

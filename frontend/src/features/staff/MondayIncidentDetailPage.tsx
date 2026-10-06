@@ -125,7 +125,7 @@ export default function MondayIncidentDetailPage() {
   const [localId, setLocalId] = useState<number | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'not_found' | 'forbidden'>('loading');
 
-  const isAdmin = user?.roles.includes('admin') ?? false;
+  const isAdmin = user?.primary_role === 'admin';
 
   if (authLoading) {
     return <div style={{ minHeight: '100dvh', background: BG }} />;

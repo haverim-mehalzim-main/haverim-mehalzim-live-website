@@ -84,7 +84,7 @@ export default function StaffAdminDashboardPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [error, setError] = useState('');
 
-  const isAdmin = user?.roles.includes('admin') ?? false;
+  const isAdmin = user?.primary_role === 'admin';
 
   if (authLoading) {
     return <div style={{ minHeight: '100dvh', background: BG }} />;

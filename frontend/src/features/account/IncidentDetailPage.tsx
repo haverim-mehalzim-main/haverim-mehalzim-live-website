@@ -763,6 +763,9 @@ export default function IncidentDetailPage() {
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [relation, setRelation] = useState<Relation>('owner');
+  // True when this account opened the incident, even if the page is showing
+  // the admin view (the highest role wins) — keeps the owner-only share link.
+  const [isOwner, setIsOwner] = useState(false);
   // Only meaningful for relation === 'volunteer' — owner/follower/admin
   // default to `joined: true` so they never hit the not-yet-approved branch.
   const [joined, setJoined] = useState(true);
@@ -783,6 +786,7 @@ export default function IncidentDetailPage() {
         setIncident(j.incident);
         setTasks(j.tasks || []);
         setRelation(j.relation);
+        setIsOwner(j.relation === 'owner' || !!j.is_owner);
         setJoined(j.joined !== false);
         setJoinRequested(!!j.join_requested);
         setVolunteerRequests(j.volunteer_requests || []);
@@ -930,7 +934,7 @@ export default function IncidentDetailPage() {
           <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
         </nav>
 
-        {relation === 'owner' && inc.incident_status_en === 'Rejected' && (
+        {isOwner && inc.incident_status_en === 'Rejected' && (
           <div className="account-card" style={{ borderColor: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
             <div className="account-detail-desc-label" style={{ color: 'var(--accent-red)' }}>This request was declined</div>
             <p className="account-detail-desc-text">
@@ -1022,7 +1026,7 @@ export default function IncidentDetailPage() {
           </div>
         )}
 
-        {relation === 'owner' && <ShareCard incidentId={inc.id} />}
+        {isOwner && <ShareCard incidentId={inc.id} />}
       </div>
     </div>
   );

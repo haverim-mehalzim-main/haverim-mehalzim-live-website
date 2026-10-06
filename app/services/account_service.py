@@ -68,6 +68,25 @@ def grant_role(user: User, role_name: str) -> None:
         link.granted_at = datetime.now(timezone.utc)
 
 
+# Access levels, highest first. A user holding several is treated as the
+# first one they hold — an admin who is also a volunteer is an admin, a
+# volunteer who also follows a case is a volunteer. "client" is the role
+# granted to anyone who has opened a call (shown to users as "caller").
+# "donor" and "premium" are extra attributes, not access levels, so they
+# don't rank. The frontend reads the result as `primary_role` rather than
+# keeping its own copy of this order.
+ROLE_RANKING = ("admin", "volunteer", "client", "family")
+
+
+def primary_role(user: User | None) -> str | None:
+    """The user's highest-ranked access level (see ROLE_RANKING), or None if
+    they hold none of them (e.g. only donor/premium)."""
+    if user is None:
+        return None
+    active = {link.role.name for link in user.role_links if link.revoked_at is None}
+    return next((role for role in ROLE_RANKING if role in active), None)
+
+
 def user_has_role(user: User | None, *role_names: str) -> bool:
     """True if `user` currently holds any of `role_names` (revoked grants
     don't count). Shared permission check for role-gated routes — e.g. an

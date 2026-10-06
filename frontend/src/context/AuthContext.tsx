@@ -1,9 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
+// The user's highest access level (admin > volunteer > client/"caller" >
+// family), decided once by the server — screens read this instead of
+// re-deriving it from `roles`. `roles` still lists everything held, including
+// donor/premium, which aren't access levels.
+export type PrimaryRole = 'admin' | 'volunteer' | 'client' | 'family';
+
 interface AuthUser {
   email: string;
   full_name: string;
   roles: string[];
+  primary_role: PrimaryRole | null;
 }
 
 interface AuthContextValue {

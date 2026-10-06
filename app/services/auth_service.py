@@ -20,7 +20,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from app.models import User
-from app.services.account_service import find_or_create_user
+from app.services.account_service import find_or_create_user, primary_role
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _MIN_PASSWORD_LEN = 8
@@ -145,4 +145,5 @@ def serialize_user_summary(user: User) -> dict:
         'email': user.email,
         'full_name': user.full_name,
         'roles': roles,
+        'primary_role': primary_role(user),
     }
