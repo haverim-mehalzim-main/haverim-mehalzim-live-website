@@ -252,31 +252,20 @@ def debug_locations():
     }), 200
 
 
-@incidents_bp.route('/api/track/<item_id>')
-def get_case_tracking(item_id):
-    """Where a case-tracker link (e.g. the one in a donor's thank-you email)
-    should take the signed-in person. The tracker is not public: it needs an
-    account, and access comes from a real relationship to the case — its
-    opener, someone who joined by invitation link, staff, or a donor who
-    funded it. Anyone else is refused, so case numbers can't be guessed into
-    a progress page. Returns the incident page to open."""
-    user = current_user()
-    if user is None:
-        return jsonify({'success': False, 'message': 'Please sign up or log in first.'}), 401
-
-    if not item_id.isdigit():
-        return jsonify({'success': False, 'message': 'Invalid case ID'}), 400
-
+def _case_for_user(user, item_id):
+    """The local Incident for a Monday item id if `user` has a real
+    relationship to it — staff, its opener, someone who joined by invitation
+    link, or a donor with a confirmed gift for it — else None. A donor's case
+    that isn't mirrored locally yet is created on the spot, but only if the
+    item really exists on Monday."""
     incident = Incident.query.filter_by(monday_item_id=item_id).one_or_none()
     if incident is None:
-        # Not mirrored locally yet. Only a donor of this exact case gets that
-        # far, and only if the item really exists on Monday.
         if incident_service.user_funded_incident(user.id, item_id) and fetch_incidents_by_ids([item_id]):
             incident_service.sync_local_incidents_from_monday([{'id': item_id}])
             db.session.commit()
             incident = Incident.query.filter_by(monday_item_id=item_id).one_or_none()
     if incident is None:
-        return jsonify({'success': False, 'message': 'No access to this case.'}), 403
+        return None
 
     allowed = (
         user_has_role(user, 'admin', 'volunteer')
@@ -284,7 +273,25 @@ def get_case_tracking(item_id):
         or IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None
         or incident_service.user_funded_incident(user.id, item_id)
     )
-    if not allowed:
+    return incident if allowed else None
+
+
+@incidents_bp.route('/api/track/<item_id>')
+def get_case_tracking(item_id):
+    """Where a case-tracker link (e.g. the one in a donor's thank-you email)
+    should take the signed-in person. The tracker is not public: it needs an
+    account, and access comes from a real relationship to the case (see
+    _case_for_user). Anyone else is refused, so case numbers can't be guessed
+    into a progress page. Returns the incident page to open."""
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please sign up or log in first.'}), 401
+
+    if not item_id.isdigit():
+        return jsonify({'success': False, 'message': 'Invalid case ID'}), 400
+
+    incident = _case_for_user(user, item_id)
+    if incident is None:
         return jsonify({'success': False, 'message': 'No access to this case.'}), 403
 
     return jsonify({'success': True, 'incident_id': incident.id}), 200
@@ -292,10 +299,17 @@ def get_case_tracking(item_id):
 
 @incidents_bp.route('/api/feedback', methods=['POST'])
 def submit_feedback():
+    """A thank-you / feedback message about a case. Only someone with access
+    to that case (same rule as the tracker) can leave one, so the feedback
+    inbox on Monday can't be flooded or spoofed from outside."""
     from flask import request
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please sign up or log in first.'}), 401
+
     body    = request.get_json(silent=True) or {}
     case_id = str(body.get('case_id', '')).strip()
-    name    = str(body.get('name',    '')).strip()[:120]
+    name    = str(body.get('name',    '')).strip()[:120] or (user.full_name or '').strip()[:120]
     message = str(body.get('message', '')).strip()[:2000]
     rating  = body.get('rating')
     if rating is not None:
@@ -304,6 +318,10 @@ def submit_feedback():
         except (ValueError, TypeError):
             rating = None
 
+    if not case_id.isdigit():
+        return jsonify({'success': False, 'message': 'Invalid case ID'}), 400
+    if _case_for_user(user, case_id) is None:
+        return jsonify({'success': False, 'message': 'No access to this case.'}), 403
     if not message or not name:
         return jsonify({'success': False, 'message': 'Name and message are required'}), 400
 
