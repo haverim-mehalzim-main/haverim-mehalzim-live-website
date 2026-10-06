@@ -89,3 +89,11 @@ EMAIL_SENDER_NAME    = os.getenv("EMAIL_SENDER_NAME",    "Haverim Mehalzim")
 EMAIL_SENDER_ADDRESS = os.getenv("EMAIL_SENDER_ADDRESS", "info@haverimmehalzim.org")
 # Where donor replies land. Defaults to the sender address.
 EMAIL_REPLY_TO       = os.getenv("EMAIL_REPLY_TO", "") or EMAIL_SENDER_ADDRESS
+
+# ── WhatsApp incident report (WhatSable) ─────────────────────────────────────
+# Every newly opened call sends a Hebrew incident report to WHATSAPP_REPORT_TO
+# (E.164, e.g. +972501234567) through WhatSable's send API. Both values must be
+# set (locally in .env, on Railway as variables) or the report is skipped.
+WHATSABLE_API_KEY    = os.getenv("WHATSABLE_API_KEY")
+WHATSAPP_REPORT_TO   = (os.getenv("WHATSAPP_REPORT_TO") or "").strip()
+WHATSABLE_SEND_URL   = os.getenv("WHATSABLE_SEND_URL", "https://dashboard.whatsable.app/api/whatsapp/messages/v2.0.0/send")

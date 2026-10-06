@@ -20,7 +20,7 @@ from app.features.incidents.payment_service import (
     SUPPORTED_CURRENCIES,
 )
 from app.features.incidents.donation_service import record_confirmed_payment
-from app.features.incidents import email_service
+from app.features.incidents import email_service, whatsapp_service
 from app.features.incidents.analysis import (
     count_incidents_per_type,
     get_incidents_current_year,
@@ -1017,6 +1017,20 @@ def open_incident():
         submitted_description=description,
     )
     db.session.commit()
+
+    whatsapp_service.send_incident_report_in_background(
+        incident_type=incident_type,
+        description=description,
+        city=city,
+        country_name=COUNTRY_NAME_BY_CODE.get(country_code, ''),
+        filer_name=filer_name,
+        filer_phone=filer_phone,
+        patient_name=patient_name,
+        patient_age=patient_age,
+        patient_gender=patient_gender,
+        patient_phone=patient_phone,
+        monday_item_id=monday_item_id,
+    )
 
     return jsonify({'success': True, 'incident': {'id': incident.id, 'monday_item_id': monday_item_id}}), 200
 
