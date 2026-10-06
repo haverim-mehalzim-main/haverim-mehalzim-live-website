@@ -7,16 +7,17 @@ saved on Monday and in our DB by the time this runs, so a WhatsApp failure is
 logged and swallowed — it must never fail or slow down opening a call. The
 send runs on a background thread for the same reason.
 
-Config (app.config): WHATSABLE_API_KEY, WHATSAPP_REPORT_TO (E.164 recipient).
+Config (app.config): WHATSABLE_API_KEY, WHATSAPP_BUSINESS_NUMBER (the recipient).
 When either is unset the report is skipped.
 """
 
+import re
 import threading
 from datetime import datetime, timezone
 
 import requests
 
-from app.config import WHATSABLE_API_KEY, WHATSAPP_REPORT_TO, WHATSABLE_SEND_URL
+from app.config import WHATSABLE_API_KEY, WHATSAPP_BUSINESS_NUMBER, WHATSABLE_SEND_URL
 from app.features.incidents.constants import GENDER_TRANSLATIONS, INCIDENT_TYPE_TRANSLATIONS
 
 try:
@@ -32,8 +33,24 @@ _HEBREW_GENDER = {english: hebrew for hebrew, english in GENDER_TRANSLATIONS.ite
 _MAX_MESSAGE_LEN = 4000
 
 
+def to_e164(number: str) -> str:
+    """WhatSable wants E.164 (+972501234567). Accepts what people actually
+    type: spaces or dashes, "00972...", "972...", or an Israeli "050..." number."""
+    raw = (number or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        return ""
+    if raw.startswith("+"):
+        return "+" + digits
+    if digits.startswith("00"):
+        return "+" + digits[2:]
+    if digits.startswith("0"):
+        return "+972" + digits[1:]
+    return "+" + digits
+
+
 def is_configured() -> bool:
-    return bool(WHATSABLE_API_KEY and WHATSAPP_REPORT_TO)
+    return bool(WHATSABLE_API_KEY and to_e164(WHATSAPP_BUSINESS_NUMBER))
 
 
 def _line(label: str, value) -> str | None:
@@ -96,14 +113,14 @@ def build_incident_report(
 
 
 def send_message(text: str) -> bool:
-    """POST one text message to WHATSAPP_REPORT_TO. Never raises."""
+    """POST one text message to WHATSAPP_BUSINESS_NUMBER. Never raises."""
     if not is_configured():
-        print("[whatsapp] not configured (WHATSABLE_API_KEY / WHATSAPP_REPORT_TO) — report skipped")
+        print("[whatsapp] not configured (WHATSABLE_API_KEY / WHATSAPP_BUSINESS_NUMBER) — report skipped")
         return False
     try:
         resp = requests.post(
             WHATSABLE_SEND_URL,
-            json={"to": WHATSAPP_REPORT_TO, "text": text},
+            json={"to": to_e164(WHATSAPP_BUSINESS_NUMBER), "text": text},
             headers={"Authorization": WHATSABLE_API_KEY, "Content-Type": "application/json"},
             timeout=15,
         )
@@ -123,7 +140,7 @@ def send_incident_report_in_background(**report_fields) -> None:
     """Build the report now (cheap, no I/O) and send it on a daemon thread so
     the caller's request returns immediately."""
     if not is_configured():
-        print("[whatsapp] not configured (WHATSABLE_API_KEY / WHATSAPP_REPORT_TO) — report skipped")
+        print("[whatsapp] not configured (WHATSABLE_API_KEY / WHATSAPP_BUSINESS_NUMBER) — report skipped")
         return
     try:
         text = build_incident_report(**report_fields)
