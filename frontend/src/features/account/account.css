@@ -639,3 +639,7 @@
   padding-top: 0;
   border-top: none;
 }
+
+/* Case-details read view: each group is a title plus its own rows. */
+.account-field-groups { gap: 22px 28px; }
+.account-field-groups > div > .account-field-group-title { margin-top: 0; }

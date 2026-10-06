@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState } from '../../components/caseJourneySteps';
 import './account.css';
 import './people.css';
+import { StaffShell } from '../staff/StaffShell';
 
 interface IncidentDetail {
   id: number;
@@ -595,29 +596,28 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
         ))}
 
         <div className="account-field-groups">
-          <div className="account-field-group-title">Classification</div>
-          <div className="account-field-group-title">Location and timeline</div>
           <div>
+            <div className="account-field-group-title">Classification</div>
             <FieldRow label="Incident status" value={incident.incident_status_en} />
             <FieldRow label="Case stage" value={incident.case_stage_en} />
             <FieldRow label="Combat service" value={incident.combat_service_en} />
             <FieldRow label="Referral source" value={incident.call_source_en} />
           </div>
           <div>
+            <div className="account-field-group-title">Location and timeline</div>
             <FieldRow label="Country" value={incident.country} />
             <FieldRow label="City / area" value={incident.city} />
             <FieldRow label="Requested" value={incident.in_request_at} />
             <FieldRow label="Closed" value={incident.closed_at} />
           </div>
-
-          <div className="account-field-group-title">Team</div>
-          <div className="account-field-group-title">Contacts and insurance</div>
           <div>
-            <FieldRow label="CCC Official" value={incident.ccc_official_en} />
-            <FieldRow label="Incident Manager" value={incident.incident_manager_en} />
+            <div className="account-field-group-title">Team</div>
+            <FieldRow label="CCC official" value={incident.ccc_official_en} />
+            <FieldRow label="Incident manager" value={incident.incident_manager_en} />
             <FieldRow label="Supervisor" value={incident.supervisor_en} />
           </div>
           <div>
+            <div className="account-field-group-title">Contacts and insurance</div>
             <FieldRow label="Caller" value={incident.filer_info} />
             <FieldRow label="Insurance" value={incident.insurance_en} />
           </div>
@@ -749,6 +749,29 @@ function CaseClosureCard({ incident, onSaved }: { incident: IncidentDetail; onSa
   );
 }
 
+function IncidentBadges({ inc }: { inc: IncidentDetail }) {
+  return (
+    <div className="staff-badges">
+      {inc.incident_status_en && (
+        <span className="staff-badge" data-tone={inc.handled ? 'green' : 'amber'}>{inc.incident_status_en}</span>
+      )}
+      {inc.incident_type && <span className="staff-badge">{inc.incident_type}</span>}
+      {inc.life_threatening && <span className="staff-badge" data-tone="red">Urgent</span>}
+      {inc.found_on_monday === false && <span className="staff-badge" data-tone="amber">Not found on Monday</span>}
+    </div>
+  );
+}
+
+function StaffKv({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="staff-kv">
+      <span className="staff-kv-label">{label}</span>
+      <span className="staff-kv-value">{value}</span>
+    </div>
+  );
+}
+
 export default function IncidentDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const { id } = useParams<{ id: string }>();
@@ -872,58 +895,94 @@ export default function IncidentDetailPage() {
   // ── Volunteer, not (yet) approved for this incident: reduced preview ──────
   if (relation === 'volunteer' && !joined) {
     return (
-      <div className="account-page">
-        <div className="account-wrapper account-wrapper--narrow">
-          <nav className="account-nav">
-            <Link to="/staff/volunteer-dashboard" className="account-back">← Back to Dashboard</Link>
-            <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
-          </nav>
-
-          <div className="account-card">
-            <div className="account-incident-top">
-              <div className="account-incident-type">{inc.incident_type || 'Case'}</div>
-              <div>
-                <span className={`account-incident-badge ${inc.handled ? 'account-incident-badge--past' : 'account-incident-badge--ongoing'}`}>
-                  {inc.handled ? 'Resolved' : 'Ongoing'}
-                </span>
-                {inc.life_threatening && <span className="account-incident-badge account-incident-badge--urgent">Urgent</span>}
-              </div>
-            </div>
-            <div className="account-incident-meta" style={{ marginBottom: 14 }}>
-              {inc.location}{inc.opened_date ? ` · opened ${inc.opened_date}` : ''}
-              {inc.found_on_monday === false && <span style={{ color: 'var(--accent-amber)' }}> · ⚠ not found on Monday</span>}
-            </div>
-            {inc.description && (
-              <>
-                <div className="account-detail-desc-label">What happened</div>
-                <p className="account-detail-desc-text">{inc.description}</p>
-              </>
-            )}
-            {inc.patient_name && (
-              <div className="account-detail-grid">
-                <div>
-                  <div className="account-detail-item-label">Patient / missing person</div>
-                  <div className="account-detail-item-value">
-                    {inc.patient_name}
-                    {inc.patient_age ? `, age ${inc.patient_age}` : ''}
-                    {inc.patient_gender ? ` (${inc.patient_gender})` : ''}
-                  </div>
-                </div>
-              </div>
-            )}
+      <StaffShell
+        title={inc.incident_type || 'Incident'}
+        subtitle={[inc.location, inc.opened_date ? `opened ${inc.opened_date}` : ''].filter(Boolean).join(' · ')}
+        actions={<Link to="/staff/volunteer-dashboard" className="staff-btn">Back to dashboard</Link>}
+      >
+        <div className="staff-incident-grid">
+          <div className="staff-incident-main">
+            <section className="staff-card staff-card-pad">
+              <IncidentBadges inc={inc} />
+              {inc.description ? <p className="staff-prose">{inc.description}</p> : <p className="staff-row-meta">No description yet.</p>}
+            </section>
           </div>
-
-          <VolunteerJoinCard incidentId={inc.id} alreadyRequested={joinRequested} onRequested={() => setJoinRequested(true)} />
+          <div className="staff-incident-side">
+            {inc.patient_name && (
+              <section className="staff-card staff-card-pad">
+                <h2 className="staff-section-title">Patient</h2>
+                <StaffKv label="Name" value={inc.patient_name} />
+                <StaffKv label="Age" value={inc.patient_age} />
+                <StaffKv label="Gender" value={inc.patient_gender} />
+              </section>
+            )}
+            <VolunteerJoinCard incidentId={inc.id} alreadyRequested={joinRequested} onRequested={() => setJoinRequested(true)} />
+          </div>
         </div>
-      </div>
+      </StaffShell>
     );
   }
 
   const isStaffRelation = relation === 'admin' || relation === 'volunteer';
-  const backLink = relation === 'admin' ? '/staff/admin-dashboard' : relation === 'volunteer' ? '/staff/volunteer-dashboard' : '/account';
-  const backLabel = isStaffRelation ? '← Back to Dashboard' : '← Back to your account';
 
-  // ── Owner or staff (admin/volunteer): full detail + task journey ──────────
+  // ── Admin / approved volunteer: the operations-console view ───────────────
+  if (isStaffRelation) {
+    const backLink = relation === 'admin' ? '/staff/admin-dashboard' : '/staff/volunteer-dashboard';
+    return (
+      <StaffShell
+        title={inc.patient_name || inc.incident_type || 'Incident'}
+        subtitle={[inc.incident_type, inc.location, inc.opened_date ? `opened ${inc.opened_date}` : ''].filter(Boolean).join(' · ')}
+        actions={<Link to={backLink} className="staff-btn">Back to dashboard</Link>}
+      >
+        <div className="staff-incident-grid">
+          <div className="staff-incident-main">
+            {isOwner && inc.incident_status_en === 'Rejected' && (
+              <div className="staff-error">
+                This request was declined{inc.rejection_reason ? `: ${inc.rejection_reason}` : '.'}
+              </div>
+            )}
+
+            <section className="staff-card staff-card-pad">
+              <IncidentBadges inc={inc} />
+              {inc.description ? <p className="staff-prose">{inc.description}</p> : <p className="staff-row-meta">No description yet.</p>}
+            </section>
+
+            <EditCaseCard incident={inc} canEdit={relation === 'admin'} onSaved={() => loadIncident({ silent: true })} />
+
+            {relation === 'admin' && inc.incident_status_en === 'Done' && (
+              <CaseClosureCard incident={inc} onSaved={() => loadIncident({ silent: true })} />
+            )}
+
+            <StaffTaskManager
+              incidentId={inc.id}
+              tasks={tasks}
+              canManage={relation === 'admin'}
+              onTasksChange={setTasks}
+            />
+          </div>
+
+          <div className="staff-incident-side">
+            <section className="staff-card staff-card-pad">
+              <h2 className="staff-section-title">People and contact</h2>
+              <StaffKv label="Opened by account" value={inc.owner ? `${inc.owner.full_name} · ${inc.owner.email}` : null} />
+              <StaffKv label="Reported by" value={inc.filer_info} />
+              <StaffKv label="Patient" value={[inc.patient_name, inc.patient_age ? `age ${inc.patient_age}` : '', inc.patient_gender].filter(Boolean).join(', ')} />
+              <StaffKv label="Patient phone" value={inc.patient_phone} />
+              {!inc.owner && !inc.filer_info && !inc.patient_phone && <p className="staff-row-meta">No contact details recorded.</p>}
+            </section>
+
+            {relation === 'admin' && (
+              <VolunteerRequestsCard incidentId={inc.id} requests={volunteerRequests} onChanged={setVolunteerRequests} />
+            )}
+
+            {isOwner && <ShareCard incidentId={inc.id} />}
+          </div>
+        </div>
+      </StaffShell>
+    );
+  }
+
+  // ── Owner: full detail + task journey, in the calm style ──────────────────
   const userTasks  = tasks.filter(t => t.assignee === 'user');
   const staffTasks = tasks.filter(t => t.assignee === 'staff');
 
@@ -931,11 +990,11 @@ export default function IncidentDetailPage() {
     <div className="account-page">
       <div className="account-wrapper">
         <nav className="account-nav">
-          <Link to={backLink} className="account-back">{backLabel}</Link>
+          <Link to="/account" className="account-back">← Back to your account</Link>
           <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
         </nav>
 
-        {isOwner && inc.incident_status_en === 'Rejected' && (
+        {inc.incident_status_en === 'Rejected' && (
           <div className="account-card" style={{ borderColor: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
             <div className="account-detail-desc-label" style={{ color: 'var(--accent-red)' }}>This request was declined</div>
             <p className="account-detail-desc-text">
@@ -956,15 +1015,7 @@ export default function IncidentDetailPage() {
           </div>
           <div className="account-incident-meta" style={{ marginBottom: 14 }}>
             {inc.location}{inc.opened_date ? ` · opened ${inc.opened_date}` : ''}
-            {isStaffRelation && inc.found_on_monday === false && (
-              <span style={{ color: 'var(--accent-amber)' }}> · ⚠ not found on Monday</span>
-            )}
           </div>
-          {isStaffRelation && inc.owner && (
-            <div className="account-incident-meta" style={{ marginBottom: 14 }}>
-              Filed by account: {inc.owner.full_name} · {inc.owner.email}
-            </div>
-          )}
           {inc.description && (
             <>
               <div className="account-detail-desc-label">What happened</div>
@@ -998,36 +1049,15 @@ export default function IncidentDetailPage() {
           </div>
         </div>
 
-        {isStaffRelation && (
-          <EditCaseCard incident={inc} canEdit={relation === 'admin'} onSaved={() => loadIncident({ silent: true })} />
-        )}
-
-        {relation === 'admin' && inc.incident_status_en === 'Done' && (
-          <CaseClosureCard incident={inc} onSaved={() => loadIncident({ silent: true })} />
-        )}
-
-        {relation === 'admin' && (
-          <VolunteerRequestsCard incidentId={inc.id} requests={volunteerRequests} onChanged={setVolunteerRequests} />
-        )}
-
-        {isStaffRelation ? (
-          <StaffTaskManager
-            incidentId={inc.id}
-            tasks={tasks}
-            canManage={relation === 'admin'}
-            onTasksChange={setTasks}
-          />
-        ) : (
-          <div className="account-card">
-            <div className="account-section-title" style={{ marginBottom: 16 }}>Case journey</div>
-            <div className="account-task-columns">
-              <TaskList title="Things you need to do" tasks={userTasks} />
-              <TaskList title="What Haverim Mehalzim is doing" tasks={staffTasks} />
-            </div>
+        <div className="account-card">
+          <div className="account-section-title" style={{ marginBottom: 16 }}>Case journey</div>
+          <div className="account-task-columns">
+            <TaskList title="Things you need to do" tasks={userTasks} />
+            <TaskList title="What Haverim Mehalzim is doing" tasks={staffTasks} />
           </div>
-        )}
+        </div>
 
-        {isOwner && <ShareCard incidentId={inc.id} />}
+        <ShareCard incidentId={inc.id} />
       </div>
     </div>
   );

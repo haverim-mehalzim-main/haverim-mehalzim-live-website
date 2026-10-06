@@ -167,3 +167,70 @@ a.staff-row:hover, .staff-row-link:hover { background: #fafaf9; }
   .staff-col { border-right: none; border-bottom: 1px solid var(--s-border-soft); }
   .staff-col:last-child { border-bottom: none; }
 }
+
+/* ── Incident page, staff variants ────────────────────────────────────────
+   The incident page is shared with callers, and its cards (case details,
+   edit form, tasks, volunteer requests) are built from the account-* classes.
+   Inside the console those classes read the console palette instead. */
+.staff-ui {
+  --bg-void: var(--s-bg);
+  --bg-surface: var(--s-rail);
+  --bg-card: var(--s-surface);
+  --bg-card-hover: #fafaf9;
+  --bg-elevated: var(--s-surface);
+  --border-dim: var(--s-border-soft);
+  --border-mid: var(--s-border);
+  --border-accent: var(--s-accent);
+  --text-primary: var(--s-text);
+  --text-secondary: #4a4a46;
+  --text-muted: var(--s-muted);
+  --accent-teal: var(--s-accent);
+  --accent-teal-dim: var(--s-accent-soft);
+  --accent-red: var(--s-red);
+  --accent-red-dim: var(--s-red-soft);
+  --accent-amber: var(--s-amber);
+  --accent-amber-dim: var(--s-amber-soft);
+  --accent-blue: var(--s-accent);
+  --accent-blue-dim: var(--s-accent-soft);
+  --font-mono: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.staff-incident-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.staff-incident-main, .staff-incident-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.staff-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.staff-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.staff-ui .account-card {
+  background: var(--s-surface); border: 1px solid var(--s-border); border-radius: var(--s-radius);
+  padding: 16px; margin-bottom: 0; box-shadow: none;
+}
+.staff-ui .account-section-title {
+  font-size: 12px; font-weight: 600; color: var(--s-muted); letter-spacing: 0.02em; text-transform: none;
+}
+.staff-ui .account-task-col-title, .staff-ui .account-detail-desc-label, .staff-ui .account-detail-item-label {
+  font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--s-muted);
+}
+.staff-ui .account-field-group-title, .staff-ui .account-form-section-title {
+  font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--s-accent);
+}
+.staff-ui .account-submit {
+  width: auto; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; letter-spacing: 0;
+  background: var(--s-accent); color: #fff; border: 1px solid var(--s-accent);
+}
+.staff-ui .account-submit:hover:not(:disabled) { background: #4338ca; opacity: 1; }
+.staff-ui .account-input, .staff-ui .account-select, .staff-ui .account-textarea {
+  font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--s-surface); border-color: var(--s-border);
+  font-family: inherit;
+}
+.staff-ui .account-input:focus, .staff-ui .account-select:focus, .staff-ui .account-textarea:focus {
+  border-color: var(--s-accent); outline: 2px solid var(--s-accent-soft);
+}
+.staff-ui .account-label { font-size: 12px; font-weight: 500; color: var(--s-muted); letter-spacing: 0; gap: 5px; }
+.staff-ui .account-task-item { padding: 9px 0; }
+.staff-ui .account-task-title { font-size: 13px; }
+
+@media (max-width: 900px) {
+  .staff-incident-grid { grid-template-columns: minmax(0, 1fr); }
+}
