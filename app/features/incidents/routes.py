@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
-from app.features.incidents.service import fetch_monday_data, create_incident, update_incident, fetch_incidents_by_ids
+from app.features.incidents.service import fetch_monday_data, create_incident, update_incident, fetch_incidents_by_ids, compose_location
 from app.features.incidents.tracker_service import fetch_case_status
 from app.features.incidents.donor_service import fetch_donor_by_token, is_valid_token_format, fetch_leaderboard
 from app.features.incidents.feedback_service import (
@@ -652,10 +652,10 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
     (Hebrew, or English where the board's own labels already are — used for
     internal matching like HANDLED_STATUSES) and an "_en" English
     translation (used for display and to pre-select the admin edit form's
-    dropdown). city/patient_phone/description each have a local override
-    (see Incident.submitted_*) that wins over Monday's own text — an admin
-    edit through this app updates both together (see staff_update_incident)
-    so the two can never show something different from each other."""
+    dropdown). city/patient_phone/description also keep a local copy (see
+    Incident.submitted_*), but Monday's value always wins when it has one —
+    the copy is only a fallback, and is kept in step by staff_update_incident
+    and sync_local_incidents_from_monday."""
     row = monday_row or {}
     hebrew_type = row.get('status_mkmb1zc6', '')
     # The requester's own submission time (Incident.created_at), not Monday's
@@ -685,24 +685,22 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         'patient_name': row.get('name', ''),
         'patient_age': row.get('numeric_mkng2emx', ''),
         'patient_gender': GENDER_TRANSLATIONS.get(hebrew_gender, hebrew_gender),
-        # Prefer what the requester actually typed (see
-        # Incident.submitted_patient_phone) over Monday's structured phone
-        # column, which our minimal form never populates (it requires a
-        # validated number + country code) but staff may fill in properly later.
-        'patient_phone': local_incident.submitted_patient_phone or row.get('phone_mkz3dr0y', ''),
+        # Monday is the source of truth; our own copy
+        # (Incident.submitted_patient_phone) is only the fallback for when
+        # Monday has nothing (e.g. its phone validation rejected the number).
+        'patient_phone': row.get('phone_mkz3dr0y') or local_incident.submitted_patient_phone or '',
         'filer_info': row.get('text_mkz3yv22', ''),
         'incident_type': INCIDENT_TYPE_TRANSLATIONS.get(hebrew_type, hebrew_type),
-        # City has no safe Monday column of its own (see create_incident) —
-        # kept locally. Country IS a real structured Monday column now, so
-        # its text comes straight from Monday like everything else.
-        'city': local_incident.submitted_location or '',
+        # City comes from Monday's location column (written at creation and
+        # on every admin edit); our own copy is only the fallback for when
+        # Monday has none (e.g. the city couldn't be geocoded).
+        'city': row.get('location_mkmbv7be') or local_incident.submitted_location or '',
         'country': country_name,
         'country_code': _COUNTRY_CODE_BY_NAME.get(country_name, ''),
-        'location': ', '.join(p for p in [local_incident.submitted_location, country_name] if p),
-        # Prefer the requester's own untouched text (see
-        # Incident.submitted_description); falls back to Monday's raw column
-        # for incidents opened any other way (no local row to prefer).
-        'description': local_incident.submitted_description or row.get('long_text_mkpfvmh3', ''),
+        'location': compose_location(row.get('location_mkmbv7be') or local_incident.submitted_location or '', country_name),
+        # Monday first, our own copy (Incident.submitted_description) only
+        # as the fallback.
+        'description': row.get('long_text_mkpfvmh3') or local_incident.submitted_description or '',
         'life_threatening': bool(row.get('check_mkn3c7v8')),
         'opened_date': opened_date,
         'status_label': status_label,
@@ -1014,7 +1012,7 @@ def open_incident():
     incident = incident_service.create_incident_record(
         user_id=user.id,
         monday_item_id=monday_item_id,
-        submitted_location=city,
+        submitted_location=compose_location(city, COUNTRY_NAME_BY_CODE.get(country_code, '')),
         submitted_patient_phone=patient_phone or None,
         submitted_description=description,
     )
@@ -1531,15 +1529,12 @@ def staff_update_incident(local_id):
     if not ok:
         return jsonify({'success': False, 'message': "Could not save changes to Monday.com — this incident may not have a valid Monday item. Please try again shortly."}), 502
 
-    # A few fields have a local override that _serialize_incident prefers
-    # over Monday's own column — without updating it here too, an edit
-    # would write to Monday but never actually show up anywhere in the app.
-    if 'description' in fields:
-        incident.submitted_description = fields['description']
-    if 'city' in fields:
-        incident.submitted_location = fields['city']
-    if 'patient_phone' in fields:
-        incident.submitted_patient_phone = fields['patient_phone']
+    # Keep our own copy of these three fields in step with what was just
+    # written to Monday (it's the fallback _serialize_incident uses when
+    # Monday has no value).
+    refreshed = fetch_incidents_by_ids([incident.monday_item_id])
+    if refreshed:
+        incident_service.mirror_monday_values(incident, refreshed[0])
     db.session.commit()
 
     return jsonify({'success': True, 'warnings': warnings}), 200

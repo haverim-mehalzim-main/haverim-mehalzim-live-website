@@ -39,8 +39,10 @@ def create_app():
     # API routes
     from app.features.incidents.routes import incidents_bp
     from app.features.auth.routes import auth_bp
+    from app.features.incidents.monday_sync import monday_sync_bp
     app.register_blueprint(incidents_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(monday_sync_bp)
 
     # Tranzila POSTs the payment result back to the redirect URLs. The SPA
     # fallback below only serves GET, so a POST would 405. Bounce it to GET

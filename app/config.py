@@ -11,6 +11,11 @@ DONORS_BOARD_ID   = os.getenv("DONORS_BOARD_ID")
 DONATIONS_BOARD_ID = os.getenv("DONATIONS_BOARD_ID")
 NEWSLETTER_BOARD_ID = os.getenv("NEWSLETTER_BOARD_ID")
 ADMIN_TOKEN       = os.getenv("ADMIN_TOKEN")
+# Secret path segment of the URL Monday.com calls when an incident changes
+# (see app/features/incidents/monday_sync.py). Monday doesn't sign webhooks
+# created through the API, so the secret in the URL is the only thing keeping
+# strangers from poking the endpoint. Unset = the endpoint is disabled (404).
+MONDAY_WEBHOOK_SECRET = os.getenv("MONDAY_WEBHOOK_SECRET")
 
 # Signs the login session cookie (see app/features/auth). MUST be a fixed
 # value in production (set FLASK_SECRET_KEY on Railway) — falling back to a

@@ -73,7 +73,11 @@ _QUERY = """
 """ % (BOARD_ID, _COL_IDS)
 
 
-def fetch_monday_data():
+def fetch_monday_data(include_unlocated: bool = False):
+    """Every board item flattened to {column_id: text}. Items with neither a
+    location nor a country are dropped by default (they can't be placed on
+    the map); the Monday->DB reconcile job passes include_unlocated=True to
+    see literally everything."""
     try:
         response = requests.post(MONDAY_URL, json={'query': _QUERY}, headers=MONDAY_HEADERS)
 
@@ -108,7 +112,7 @@ def fetch_monday_data():
             location = row.get('location_mkmbv7be', '').strip()
             country  = row.get('country_mkmb91h3',  '').strip()
 
-            if not location and not country:
+            if not location and not country and not include_unlocated:
                 missing_count += 1
             else:
                 processed_rows.append(row)
@@ -139,10 +143,10 @@ def fetch_monday_data():
 #   default; staff set this themselves once they've actually reviewed it.
 #
 #   location_mkmbv7be — Monday's "location" column requires real lat/lng
-#   coordinates (a plain address is rejected outright); our minimal form only
-#   collects a free-text city, no geocoding. Left alone — do not write to
-#   this column. The submitted city is kept verbatim in our own DB
-#   (Incident.submitted_location) for "my incidents" to display.
+#   coordinates (a plain address is rejected outright), so it can't go in the
+#   create_item call. It IS written right after, as a separate best-effort
+#   mutation that geocodes the submitted city (see _set_location_best_effort),
+#   so Monday and our own copy (Incident.submitted_location) agree.
 #
 #   check_mkn3c7v8 (life-threatening) — determined by staff after reviewing
 #   the case, not by whoever fills in the form. Left at Monday's own default.
@@ -321,7 +325,38 @@ def create_incident(
     if patient_phone:
         _set_patient_phone_best_effort(item_id, patient_phone, country_code)
 
+    _set_location_best_effort(item_id, city, country_name)
+
     return item_id
+
+
+def compose_location(city: str, country_name: str) -> str:
+    """The text stored in Monday's location column: "City, Country" (e.g.
+    "Athens, Greece"). Doesn't append the country again if the city text
+    already ends with it, so re-saving an already-composed value is a no-op."""
+    city = (city or "").strip()
+    country_name = (country_name or "").strip()
+    if not city:
+        return country_name
+    if not country_name or city.lower().endswith(country_name.lower()):
+        return city
+    return f"{city}, {country_name}"
+
+
+def _set_location_best_effort(item_id: str, city: str, country_name: str) -> None:
+    """
+    Best-effort follow-up write of "City, Country" to Monday's location
+    column, kept separate from create_item for the same reason as the phone:
+    the column needs real coordinates, and a geocode miss must never take
+    the already-created incident down with it.
+    """
+    address = compose_location(city, country_name)
+    coords = _geocode_address(address)
+    if coords is None:
+        print(f"[service] Couldn't geocode {address!r} for new incident {item_id} — Monday location left blank")
+        return
+    lat, lng = coords
+    _mutate_columns(item_id, {_LOCATION_COL: {"lat": lat, "lng": lng, "address": address}})
 
 
 def _set_patient_phone_best_effort(item_id: str, patient_phone: str, country_code: str) -> None:
@@ -483,12 +518,17 @@ def update_incident(*, item_id: str, fields: dict) -> tuple[bool, list[str]]:
                 warnings.append("Patient phone couldn't be saved — check the number format.")
 
     if fields.get("city"):
-        coords = _geocode_address(fields["city"])
+        country_name = COUNTRY_NAME_BY_CODE.get(fields.get("country_code", ""))
+        if country_name is None:
+            current = fetch_incidents_by_ids([item_id])
+            country_name = (current[0].get("country_mkmb91h3") if current else "") or ""
+        address = compose_location(fields["city"], country_name)
+        coords = _geocode_address(address)
         if coords is None:
-            warnings.append("Couldn't place the map pin for that city/area — everything else was saved.")
+            warnings.append("Couldn't find that city/area on the map, so the location wasn't saved — everything else was.")
         else:
             lat, lng = coords
-            if not _mutate_columns(item_id, {_LOCATION_COL: {"lat": lat, "lng": lng, "address": fields["city"]}}):
+            if not _mutate_columns(item_id, {_LOCATION_COL: {"lat": lat, "lng": lng, "address": address}}):
                 warnings.append("Couldn't save the map pin for that city/area.")
 
     return True, warnings
@@ -511,6 +551,7 @@ def fetch_incidents_by_ids(monday_item_ids: list) -> list:
       items (ids: [{ids_gql}]) {{
         id
         name
+        state
         column_values (ids: [{_COL_IDS}]) {{
           id
           text
@@ -528,6 +569,10 @@ def fetch_incidents_by_ids(monday_item_ids: list) -> list:
 
         rows = []
         for item in data["data"]["items"]:
+            # Monday still returns deleted items when asked by id; for us
+            # they're gone, same as if they'd never come back at all.
+            if item.get("state") == "deleted":
+                continue
             row = {"name": item["name"], "id": item["id"]}
             for cv in item["column_values"]:
                 row[cv["id"]] = cv["text"]

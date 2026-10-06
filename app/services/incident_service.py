@@ -243,21 +243,51 @@ def get_rejection_reason(monday_item_id: str) -> str | None:
 # this keeps the local table a mirror of the whole board, not just of
 # incidents opened through the app.
 
-def sync_local_incidents_from_monday(monday_rows: list[dict]) -> int:
+_MIRRORED_COLUMNS = (
+    ('submitted_location',      'location_mkmbv7be'),
+    ('submitted_patient_phone', 'phone_mkz3dr0y'),
+    ('submitted_description',   'long_text_mkpfvmh3'),
+)
+
+
+def mirror_monday_values(incident: Incident, monday_row: dict) -> bool:
+    """Copy city / patient phone / description from Monday onto our own copy
+    (Monday is the source of truth; the copy is only a fallback for when
+    Monday has no value). Blank Monday values never overwrite a copy.
+    Returns True if anything changed. Does not commit."""
+    changed = False
+    for attr, column_id in _MIRRORED_COLUMNS:
+        value = (monday_row.get(column_id) or '').strip()
+        if value and getattr(incident, attr) != value:
+            setattr(incident, attr, value)
+            changed = True
+    return changed
+
+
+def sync_local_incidents_from_monday(monday_rows: list[dict] | None) -> dict:
     """Create a shadow Incident row (user_id=None — no caller account, just a
     Monday item) for every row in monday_rows that doesn't have a local row
-    yet. Does not commit."""
-    monday_ids = {str(row['id']) for row in monday_rows if row.get('id')}
-    if not monday_ids:
-        return 0
-    existing_ids = {
-        row[0] for row in db.session.query(Incident.monday_item_id)
-        .filter(Incident.monday_item_id.in_(monday_ids)).all()
+    yet, and refresh every existing row's copy of city / phone / description
+    from Monday. Returns {'created': n, 'updated': m}. Does not commit.
+    A failed Monday fetch (None) is a no-op, not an error."""
+    rows_by_id = {str(row['id']): row for row in (monday_rows or []) if row.get('id')}
+    stats = {'created': 0, 'updated': 0}
+    if not rows_by_id:
+        return stats
+    existing = {
+        inc.monday_item_id: inc
+        for inc in Incident.query.filter(Incident.monday_item_id.in_(list(rows_by_id))).all()
     }
-    missing_ids = monday_ids - existing_ids
-    for monday_item_id in missing_ids:
-        db.session.add(Incident(user_id=None, monday_item_id=monday_item_id))
-    return len(missing_ids)
+    for monday_item_id, row in rows_by_id.items():
+        incident = existing.get(monday_item_id)
+        if incident is None:
+            incident = Incident(user_id=None, monday_item_id=monday_item_id)
+            db.session.add(incident)
+            stats['created'] += 1
+            mirror_monday_values(incident, row)
+        elif mirror_monday_values(incident, row):
+            stats['updated'] += 1
+    return stats
 
 
 # ── Volunteers' own participation history ───────────────────────────────────
