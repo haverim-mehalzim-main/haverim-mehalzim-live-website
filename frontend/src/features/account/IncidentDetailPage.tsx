@@ -994,6 +994,16 @@ export default function IncidentDetailPage() {
           <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
         </nav>
 
+        {(location.state as { justOpened?: boolean } | null)?.justOpened && (
+          <div className="call-opened-banner" role="status">
+            <span aria-hidden="true">✓</span>
+            <div>
+              <strong>Your call is open</strong>
+              A member of our team will follow up shortly. You can share this case with family and friends below.
+            </div>
+          </div>
+        )}
+
         {inc.incident_status_en === 'Rejected' && (
           <div className="account-card" style={{ borderColor: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
             <div className="account-detail-desc-label" style={{ color: 'var(--accent-red)' }}>This request was declined</div>

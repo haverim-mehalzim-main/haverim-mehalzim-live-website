@@ -240,3 +240,104 @@
 .donor-page .donor-cta { background: #f3faf7; }
 .donor-page .donor-cta-donate { color: #ffffff; }
 .donor-page .donor-timeline-dot.teal, .donor-page .donor-timeline-dot.amber { box-shadow: none; }
+
+/* ── Open a call: a guided form for someone in a hard moment ────────────── */
+.account-page .call-hero { margin: 4px 0 22px; }
+.account-page .call-title {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 8px;
+}
+.account-page .call-lead { color: var(--text-secondary); font-size: 16px; }
+.account-page .call-safety {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; padding: 12px 14px;
+  border-radius: 14px; background: var(--accent-amber-dim); color: #6b4300; font-size: 14px;
+}
+.account-page .call-section {
+  background: var(--bg-card); border: 1px solid var(--border-dim); border-radius: 20px; padding: 22px 20px;
+  margin-bottom: 16px; box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 8px 24px rgba(60, 50, 30, 0.05);
+}
+.account-page .call-section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.account-page .call-step {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent-teal-dim); color: var(--accent-teal); font-weight: 600; font-size: 14px;
+}
+.account-page .call-section-title { font-size: 17px; font-weight: 600; line-height: 1.2; }
+.account-page .call-section-hint { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+.account-page .call-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+.account-page .call-field:last-child { margin-bottom: 0; }
+.account-page .call-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.account-page .call-optional { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.account-page .call-help { font-size: 13px; color: var(--text-muted); }
+.account-page .call-field-error { font-size: 13px; color: var(--accent-red); font-weight: 500; }
+.account-page .call-field[data-invalid='true'] .account-input,
+.account-page .call-field[data-invalid='true'] .account-select,
+.account-page .call-field[data-invalid='true'] .account-textarea,
+.account-page .call-field[data-invalid='true'] .call-chip { border-color: var(--accent-red); }
+
+.account-page .call-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+.account-page .call-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.account-page .call-chip {
+  padding: 10px 16px; border-radius: 999px; border: 1px solid var(--border-mid); background: #ffffff;
+  color: var(--text-secondary); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.account-page .call-chip:hover { border-color: var(--accent-teal); }
+.account-page .call-chip[aria-pressed='true'] { background: var(--accent-teal-dim); border-color: var(--accent-teal); color: var(--accent-teal); font-weight: 600; }
+
+.account-page .call-seg { display: flex; border: 1px solid var(--border-mid); border-radius: 12px; overflow: hidden; background: #ffffff; }
+.account-page .call-seg button {
+  flex: 1; padding: 12px 6px; border: none; border-right: 1px solid var(--border-dim); background: transparent;
+  font: inherit; font-size: 14px; color: var(--text-secondary); cursor: pointer;
+}
+.account-page .call-seg button:last-child { border-right: none; }
+.account-page .call-seg button[aria-pressed='true'] { background: var(--accent-teal-dim); color: var(--accent-teal); font-weight: 600; }
+
+.account-page .call-submit-bar {
+  position: sticky; bottom: 0; margin: 8px -24px 0; padding: 14px 24px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg-void) 72%, rgba(251, 248, 243, 0));
+}
+.account-page .call-submit-note { text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+.account-page .call-opened-banner {
+  display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; margin-bottom: 16px; border-radius: 16px;
+  background: var(--accent-teal-dim); color: #0b4f3e; font-size: 15px;
+}
+.account-page .call-opened-banner strong { display: block; font-size: 16px; margin-bottom: 2px; }
+
+/* ── Join a shared case ─────────────────────────────────────────────────── */
+.auth-page .join-hero { text-align: center; padding: 8px 0 4px; }
+.auth-page .join-ring {
+  width: 96px; height: 96px; margin: 0 auto 24px; border-radius: 50%; display: grid; place-items: center; font-size: 38px;
+  background: radial-gradient(circle, #ffffff 0%, var(--accent-teal-dim) 72%);
+  box-shadow: 0 0 0 10px rgba(15, 110, 86, 0.07), 0 0 0 22px rgba(15, 110, 86, 0.04);
+}
+.auth-page .join-ring--pulse { animation: join-breathe 2.4s ease-in-out infinite; }
+.auth-page .join-ring--error { background: radial-gradient(circle, #ffffff 0%, var(--accent-red-dim) 72%); box-shadow: 0 0 0 10px rgba(180, 35, 24, 0.06); }
+.auth-page .join-title {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 10px;
+}
+.auth-page .join-lead { color: var(--text-secondary); font-size: 16px; max-width: 26em; margin: 0 auto; }
+.auth-page .join-list { list-style: none; text-align: left; margin: 24px 0; display: flex; flex-direction: column; gap: 14px; }
+.auth-page .join-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--text-secondary); }
+.auth-page .join-list li strong { color: var(--text-primary); font-weight: 600; }
+.auth-page .join-check {
+  flex-shrink: 0; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent-teal-dim); color: var(--accent-teal); font-size: 12px; font-weight: 700;
+}
+.auth-page .join-actions { display: flex; flex-direction: column; gap: 10px; }
+.auth-page .join-actions .auth-submit { display: block; text-decoration: none; }
+.auth-page .join-fine { margin-top: 18px; font-size: 13px; color: var(--text-muted); text-align: center; }
+
+@keyframes join-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-page .join-ring--pulse { animation: none; }
+}
+@media (max-width: 520px) {
+  .account-page .call-row { grid-template-columns: 1fr; }
+  .account-page .call-title, .auth-page .join-title { font-size: 27px; }
+}

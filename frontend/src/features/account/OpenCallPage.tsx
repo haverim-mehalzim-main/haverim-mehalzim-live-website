@@ -1,8 +1,48 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './account.css';
 import './people.css';
+
+type FieldKey = 'incidentType' | 'city' | 'countryCode' | 'description' | 'filerName' | 'filerPhone' | 'patientName';
+type Errors = Partial<Record<FieldKey, string>>;
+
+const GENDERS = [
+  { value: '', label: 'Prefer not to say' },
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' },
+];
+
+function Field({ id, label, optional, help, error, children }: {
+  id: string; label: string; optional?: boolean; help?: string; error?: string; children: ReactNode;
+}) {
+  return (
+    <div className="call-field" data-invalid={error ? 'true' : undefined} id={`field-${id}`}>
+      <label className="call-label" htmlFor={id}>
+        <span>{label}</span>
+        {optional && <span className="call-optional">Optional</span>}
+      </label>
+      {children}
+      {error ? <div className="call-field-error" role="alert">{error}</div> : help && <div className="call-help">{help}</div>}
+    </div>
+  );
+}
+
+function Section({ step, title, hint, children }: { step: number; title: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="call-section">
+      <div className="call-section-head">
+        <div className="call-step">{step}</div>
+        <div>
+          <h2 className="call-section-title">{title}</h2>
+          <div className="call-section-hint">{hint}</div>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function OpenCallPage() {
   const { user, loading } = useAuth();
@@ -20,27 +60,19 @@ export default function OpenCallPage() {
   const [patientAge, setPatientAge] = useState('');
   const [patientGender, setPatientGender] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     fetch('/api/incident-types')
       .then(r => r.json())
-      .then(j => {
-        if (j?.success && Array.isArray(j.types)) {
-          setTypes(j.types);
-          setIncidentType(prev => prev || j.types[0] || '');
-        }
-      })
+      .then(j => { if (j?.success && Array.isArray(j.types)) setTypes(j.types); })
       .catch(() => {});
 
     fetch('/api/countries')
       .then(r => r.json())
-      .then(j => {
-        if (j?.success && Array.isArray(j.countries)) {
-          setCountries(j.countries);
-        }
-      })
+      .then(j => { if (j?.success && Array.isArray(j.countries)) setCountries(j.countries); })
       .catch(() => {});
   }, []);
 
@@ -48,16 +80,29 @@ export default function OpenCallPage() {
     if (user?.full_name) setFilerName(prev => prev || user.full_name);
   }, [user]);
 
+  const clear = (key: FieldKey) => setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev));
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!incidentType)          { setError('Please choose an incident type.'); return; }
-    if (!city.trim())           { setError('Please enter a city.'); return; }
-    if (!countryCode)           { setError('Please choose a country.'); return; }
-    if (!description.trim())    { setError('Please describe what happened and what you need.'); return; }
-    if (!filerName.trim())      { setError('Please enter the name of the person filling in this form.'); return; }
-    if (!filerPhone.trim())     { setError('Please enter a phone number for the person filling in this form.'); return; }
-    if (!patientName.trim())    { setError('Please enter the full name of the patient/missing person.'); return; }
+    setFormError('');
+
+    const found: Errors = {};
+    if (!incidentType)       found.incidentType = 'Choose the closest match.';
+    if (!city.trim())        found.city = 'Enter the city.';
+    if (!countryCode)        found.countryCode = 'Choose the country.';
+    if (!description.trim()) found.description = 'Tell us what happened and what you need.';
+    if (!patientName.trim()) found.patientName = 'Enter the full name of the person who needs help.';
+    if (!filerName.trim())   found.filerName = 'Enter your name.';
+    if (!filerPhone.trim())  found.filerPhone = 'Enter a phone number we can reach you on.';
+    setErrors(found);
+
+    const order: FieldKey[] = ['incidentType', 'city', 'countryCode', 'description', 'patientName', 'filerName', 'filerPhone'];
+    const first = order.find(k => found[k]);
+    if (first) {
+      const el = document.getElementById(`field-${first}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
 
     setBusy(true);
     try {
@@ -79,31 +124,37 @@ export default function OpenCallPage() {
       });
       const json = await res.json();
       if (json.success && json.incident) {
-        navigate(`/incidents/${json.incident.id}`);
+        navigate(`/incidents/${json.incident.id}`, { state: { justOpened: true } });
       } else {
-        setError(json.message || 'Could not open the call. Please try again.');
+        setFormError(json.message || "We couldn't open the call. Please try again.");
         setBusy(false);
       }
     } catch {
-      setError('Network error. Please try again.');
+      setFormError('Network error. Please try again.');
       setBusy(false);
     }
   };
+
+  const nav = (back: string, label: string) => (
+    <nav className="account-nav">
+      <Link to={back} className="account-back">{label}</Link>
+      <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
+    </nav>
+  );
 
   if (!loading && !user) {
     return (
       <div className="account-page">
         <div className="account-wrapper account-wrapper--narrow">
-          <nav className="account-nav">
-            <Link to="/" className="account-back">← Back to the site</Link>
-            <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
-          </nav>
-          <div className="account-card account-card--center">
-            <p>Please log in to open a call.</p>
-            <Link to="/login" className="account-submit" style={{ display: 'inline-block', textDecoration: 'none', marginTop: 12 }}>
-              Log In
-            </Link>
+          {nav('/', '← Back to the site')}
+          <div className="call-hero">
+            <h1 className="call-title">Let's get you help</h1>
+            <p className="call-lead">Log in first so we can open your case and keep you updated. It only takes a moment.</p>
           </div>
+          <Link to="/login?next=/account/open-call" className="account-submit" style={{ display: 'block', textDecoration: 'none' }}>Log in</Link>
+          <p className="call-submit-note" style={{ marginTop: 14 }}>
+            New here? <Link to="/signup?next=/account/open-call" style={{ color: 'var(--accent-teal)', fontWeight: 600 }}>Create an account</Link>
+          </p>
         </div>
       </div>
     );
@@ -112,140 +163,123 @@ export default function OpenCallPage() {
   return (
     <div className="account-page">
       <div className="account-wrapper account-wrapper--narrow">
-        <nav className="account-nav">
-          <Link to="/account" className="account-back">← Back to your account</Link>
-          <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
-        </nav>
+        {nav('/account', '← Back to your account')}
 
-        <div className="account-card">
-          <div className="account-section-title" style={{ marginBottom: 8 }}>Open a call</div>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
-            Tell us the essentials now so we can open your case right away — a member of our team will
-            follow up for any further details we need.
+        <div className="call-hero">
+          <h1 className="call-title">Tell us what's happening</h1>
+          <p className="call-lead">
+            Share the essentials now and we'll open your case right away. A member of our team
+            will follow up for anything else we need.
           </p>
-
-          <form className="account-form" onSubmit={submit}>
-            <label className="account-label">
-              Incident type
-              <select
-                className="account-select"
-                value={incidentType}
-                onChange={e => setIncidentType(e.target.value)}
-              >
-                {types.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-
-            <label className="account-label">
-              City
-              <input
-                className="account-input"
-                value={city}
-                onChange={e => setCity(e.target.value)}
-                placeholder="e.g. Bangkok"
-              />
-            </label>
-
-            <label className="account-label">
-              Country
-              <select
-                className="account-select"
-                value={countryCode}
-                onChange={e => setCountryCode(e.target.value)}
-              >
-                <option value="">Select a country</option>
-                {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-              </select>
-            </label>
-
-            <label className="account-label">
-              What happened? What do you need?
-              <textarea
-                className="account-textarea"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="As much detail as you can — this helps us respond faster."
-              />
-            </label>
-
-            <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Your details</div>
-
-            <label className="account-label">
-              Your full name (person filling in this form)
-              <input
-                className="account-input"
-                value={filerName}
-                onChange={e => setFilerName(e.target.value)}
-                placeholder="Full name"
-              />
-            </label>
-
-            <label className="account-label">
-              Your phone number
-              <input
-                className="account-input"
-                value={filerPhone}
-                onChange={e => setFilerPhone(e.target.value)}
-                placeholder="e.g. +972 50 123 4567"
-              />
-            </label>
-
-            <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Patient or missing person</div>
-
-            <label className="account-label">
-              Full name
-              <input
-                className="account-input"
-                value={patientName}
-                onChange={e => setPatientName(e.target.value)}
-                placeholder="Full name"
-              />
-            </label>
-
-            <label className="account-label">
-              Age
-              <input
-                className="account-input"
-                type="number"
-                min={0}
-                max={150}
-                value={patientAge}
-                onChange={e => setPatientAge(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            <label className="account-label">
-              Gender
-              <select
-                className="account-select"
-                value={patientGender}
-                onChange={e => setPatientGender(e.target.value)}
-              >
-                <option value="">Prefer not to say</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </label>
-
-            <label className="account-label">
-              Phone number
-              <input
-                className="account-input"
-                value={patientPhone}
-                onChange={e => setPatientPhone(e.target.value)}
-                placeholder="Optional"
-              />
-            </label>
-
-            {error && <div className="account-error">{error}</div>}
-
-            <button className="account-submit" type="submit" disabled={busy}>
-              {busy ? 'Opening call…' : 'Open Call'}
-            </button>
-          </form>
+          <div className="call-safety" role="note">
+            <span aria-hidden="true">⚠</span>
+            <span>If someone is in immediate danger, contact local emergency services first.</span>
+          </div>
         </div>
+
+        <form onSubmit={submit} noValidate>
+          <Section step={1} title="What happened" hint="The more detail, the faster we can respond.">
+            <Field id="incidentType" label="Type of help needed" error={errors.incidentType}>
+              <div className="call-chips" role="group" aria-label="Type of help needed">
+                {types.map(t => (
+                  <button
+                    key={t} type="button" className="call-chip" aria-pressed={incidentType === t}
+                    onClick={() => { setIncidentType(t); clear('incidentType'); }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <div className="call-row">
+              <Field id="city" label="City" error={errors.city}>
+                <input
+                  id="city" className="account-input" value={city} autoComplete="address-level2"
+                  onChange={e => { setCity(e.target.value); clear('city'); }} placeholder="e.g. Bangkok"
+                />
+              </Field>
+              <Field id="countryCode" label="Country" error={errors.countryCode}>
+                <select
+                  id="countryCode" className="account-select" value={countryCode} autoComplete="country"
+                  onChange={e => { setCountryCode(e.target.value); clear('countryCode'); }}
+                >
+                  <option value="">Select a country</option>
+                  {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <Field
+              id="description" label="What happened, and what do you need?" error={errors.description}
+              help="Where exactly, what's going on, and what help is needed."
+            >
+              <textarea
+                id="description" className="account-textarea" value={description} maxLength={2000} rows={5}
+                onChange={e => { setDescription(e.target.value); clear('description'); }}
+                placeholder="Write it in your own words."
+              />
+            </Field>
+          </Section>
+
+          <Section step={2} title="Who needs help" hint="The patient or missing person.">
+            <Field id="patientName" label="Full name" error={errors.patientName}>
+              <input
+                id="patientName" className="account-input" value={patientName}
+                onChange={e => { setPatientName(e.target.value); clear('patientName'); }} placeholder="Full name"
+              />
+            </Field>
+
+            <div className="call-row">
+              <Field id="patientAge" label="Age" optional>
+                <input
+                  id="patientAge" className="account-input" type="number" inputMode="numeric" min={0} max={150}
+                  value={patientAge} onChange={e => setPatientAge(e.target.value)}
+                />
+              </Field>
+              <Field id="patientPhone" label="Their phone" optional>
+                <input
+                  id="patientPhone" className="account-input" type="tel" autoComplete="off"
+                  value={patientPhone} onChange={e => setPatientPhone(e.target.value)} placeholder="+972 50 123 4567"
+                />
+              </Field>
+            </div>
+
+            <Field id="patientGender" label="Gender" optional>
+              <div className="call-seg" role="group" aria-label="Gender">
+                {GENDERS.map(g => (
+                  <button key={g.label} type="button" aria-pressed={patientGender === g.value} onClick={() => setPatientGender(g.value)}>
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </Section>
+
+          <Section step={3} title="How we reach you" hint="So a volunteer can follow up with you directly.">
+            <Field id="filerName" label="Your name" error={errors.filerName}>
+              <input
+                id="filerName" className="account-input" value={filerName} autoComplete="name"
+                onChange={e => { setFilerName(e.target.value); clear('filerName'); }} placeholder="Full name"
+              />
+            </Field>
+            <Field id="filerPhone" label="Your phone number" error={errors.filerPhone} help="Include the country code if you're abroad.">
+              <input
+                id="filerPhone" className="account-input" type="tel" autoComplete="tel" value={filerPhone}
+                onChange={e => { setFilerPhone(e.target.value); clear('filerPhone'); }} placeholder="+972 50 123 4567"
+              />
+            </Field>
+          </Section>
+
+          {formError && <div className="account-error" role="alert" style={{ marginBottom: 12 }}>{formError}</div>}
+
+          <div className="call-submit-bar">
+            <button className="account-submit" type="submit" disabled={busy}>
+              {busy ? 'Opening your call…' : 'Open call'}
+            </button>
+            <div className="call-submit-note">We'll confirm as soon as it's open.</div>
+          </div>
+        </form>
       </div>
     </div>
   );
