@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import '../account/account.css';
 import './auth.css';
+import '../account/people.css';
 
 interface IncidentSummary {
   id: number;
@@ -136,7 +137,7 @@ export default function AccountPage() {
     <div className="auth-page">
       <div className="auth-wrapper" style={{ maxWidth: 640 }}>
         <nav className="auth-nav">
-          <Link to="/" className="auth-back">← Back to Dashboard</Link>
+          <Link to="/" className="auth-back">← Back to the site</Link>
           <div className="auth-nav-brand">
             <span className="auth-nav-brand-dot" />
             Haverim Mehalzim
@@ -151,7 +152,7 @@ export default function AccountPage() {
         ) : user ? (
           <>
             <div className="auth-card" style={{ marginBottom: 24 }}>
-              <div className="auth-eyebrow">◈ My Account</div>
+              <div className="auth-eyebrow">Your account</div>
               <h1 className="auth-title">{user.full_name}</h1>
               <p className="auth-sub">{user.email}</p>
               {badgeRoles.length > 0 && (
@@ -162,7 +163,7 @@ export default function AccountPage() {
                 </div>
               )}
               <button className="auth-submit auth-submit--secondary" onClick={handleLogout}>
-                Log Out
+                Log out
               </button>
             </div>
 
@@ -172,7 +173,7 @@ export default function AccountPage() {
                   {isAdmin && (
                     <Link to="/staff/admin-dashboard" className="account-staff-dashboard-link account-staff-dashboard-link--admin">
                       <span>
-                        ◈ Admin Dashboard
+                        Admin Dashboard
                         <span className="account-staff-dashboard-link-sub">Pipeline, workload &amp; approvals</span>
                       </span>
                       <span>→</span>
@@ -181,7 +182,7 @@ export default function AccountPage() {
                   {!isAdmin && (
                     <Link to="/staff/volunteer-dashboard" className="account-staff-dashboard-link">
                       <span>
-                        ◈ Volunteer Dashboard
+                        Volunteer Dashboard
                         <span className="account-staff-dashboard-link-sub">Done, in-progress &amp; your cases</span>
                       </span>
                       <span>→</span>
@@ -194,7 +195,7 @@ export default function AccountPage() {
             {isDonor && (
               <div className="account-section">
                 <div className="account-section-header">
-                  <div className="account-section-title">◈ Your Donations</div>
+                  <div className="account-section-title">Your donations</div>
                 </div>
                 {!donationsLoaded ? (
                   <div className="account-empty">Loading…</div>
@@ -208,11 +209,11 @@ export default function AccountPage() {
 
             <div className="account-section">
               <div className="account-section-header">
-                <div className="account-section-title">◈ Ongoing Cases</div>
-                <Link to="/account/open-call" className="account-open-call-btn">🆘 Open a Call</Link>
+                <div className="account-section-title">Ongoing cases</div>
+                <Link to="/account/open-call" className="account-open-call-btn">🆘 Open a call</Link>
               </div>
               <p className="account-section-caption">
-                Cases you opened yourself are marked 📞 You're the caller · cases you're following for a family member or friend are marked 💙 Following
+                📞 marks calls you opened yourself. 💙 marks cases you're following for someone you know.
               </p>
               {!incidentsLoaded ? (
                 <div className="account-empty">Loading…</div>
@@ -226,7 +227,7 @@ export default function AccountPage() {
             {incidentsLoaded && past.length > 0 && (
               <div className="account-section">
                 <div className="account-section-header">
-                  <div className="account-section-title">◈ Past Cases</div>
+                  <div className="account-section-title">Past cases</div>
                 </div>
                 {past.map(inc => <IncidentCard key={inc.id} incident={inc} ongoing={false} />)}
               </div>
@@ -235,13 +236,13 @@ export default function AccountPage() {
             {!user.roles.includes('premium') && (
               <div className="account-section">
                 <div className="account-premium-card">
-                  <div className="account-premium-title">★ Go Premium</div>
+                  <div className="account-premium-title">★ Go premium</div>
                   <ul className="account-premium-list">
                     <li>24/7 priority availability</li>
                     <li>Option to raise a donation campaign for your case</li>
                     <li>More benefits on the way</li>
                   </ul>
-                  <Link to="/premium" className="account-premium-cta">Learn More →</Link>
+                  <Link to="/premium" className="account-premium-cta">Learn more →</Link>
                 </div>
               </div>
             )}

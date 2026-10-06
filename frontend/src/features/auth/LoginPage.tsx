@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
+import '../account/people.css';
 
 export default function LoginPage() {
   const { refresh } = useAuth();
@@ -47,7 +48,7 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-wrapper">
         <nav className="auth-nav">
-          <Link to="/" className="auth-back">← Back to Dashboard</Link>
+          <Link to="/" className="auth-back">← Back to the site</Link>
           <div className="auth-nav-brand">
             <span className="auth-nav-brand-dot" />
             Haverim Mehalzim
@@ -55,8 +56,8 @@ export default function LoginPage() {
         </nav>
 
         <div className="auth-card">
-          <div className="auth-eyebrow">◈ Welcome Back</div>
-          <h1 className="auth-title">Log In</h1>
+          <div className="auth-eyebrow">Welcome back</div>
+          <h1 className="auth-title">Log in</h1>
           <form className="auth-form" onSubmit={handleSubmit}>
             <label className="auth-label">
               Email
@@ -81,7 +82,7 @@ export default function LoginPage() {
             </label>
             {error && <div className="auth-error">{error}</div>}
             <button className="auth-submit" type="submit" disabled={submitting}>
-              {submitting ? 'Logging in…' : 'Log In'}
+              {submitting ? 'Logging in…' : 'Log in'}
             </button>
           </form>
           <div className="auth-switch">

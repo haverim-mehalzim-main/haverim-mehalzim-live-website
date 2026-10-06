@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState } from '../../components/caseJourneySteps';
 import './account.css';
+import './people.css';
 
 interface IncidentDetail {
   id: number;
@@ -144,7 +145,7 @@ function FamilyJourneyCard({ progress }: {
           const state = journeyStepState(s, current);
           return (
             <div key={s.step}>
-              {idx > 0 && <div className={`account-journey-connector ${s.step <= current ? 'filled' : 'empty'}`} />}
+              {idx > 0 && <div className={`account-journey-connector account-journey-connector--${s.step <= current ? 'filled' : 'empty'}`} />}
               <div className={`account-journey-step ${state}`}>
                 <div className="account-journey-step-node">
                   {state === 'complete' ? '✓' : state === 'active' ? s.icon : s.step}
@@ -190,7 +191,7 @@ function ShareCard({ incidentId }: { incidentId: number }) {
 
   return (
     <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 10 }}>◈ Share With Family &amp; Friends</div>
+      <div className="account-section-title" style={{ marginBottom: 10 }}>Share with family and friends</div>
       <p className="account-detail-desc-text" style={{ marginBottom: 14 }}>
         Send this link to someone who wants to follow along. They&apos;ll be able to see how things
         are going — no operational details, just the reassurance that this is being handled.
@@ -292,7 +293,7 @@ function StaffTaskManager({ incidentId, tasks, canManage, onTasksChange }: {
 
   return (
     <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 16 }}>◈ Case Journey</div>
+      <div className="account-section-title" style={{ marginBottom: 16 }}>Case journey</div>
       {tasks.length === 0 ? (
         <div className="account-empty" style={{ marginBottom: canManage ? 14 : 0 }}>No tasks yet.</div>
       ) : (
@@ -354,7 +355,7 @@ function VolunteerJoinCard({ incidentId, alreadyRequested, onRequested }: {
             contact details and work its task list.
           </p>
           <button className="account-submit" style={{ width: 'auto', padding: '10px 18px' }} onClick={request} disabled={busy}>
-            {busy ? 'Requesting…' : 'Request to Join'}
+            {busy ? 'Requesting…' : 'Request to join'}
           </button>
         </>
       )}
@@ -388,7 +389,7 @@ function VolunteerRequestsCard({ incidentId, requests, onChanged }: {
 
   return (
     <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 14 }}>◈ Volunteers Requesting to Join ({requests.length})</div>
+      <div className="account-section-title" style={{ marginBottom: 14 }}>Volunteers asking to join ({requests.length})</div>
       {requests.map(r => (
         <div className="account-task-item" key={r.id}>
           <div style={{ flex: 1 }}>
@@ -578,7 +579,7 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
     return (
       <div className="account-card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div className="account-section-title">◈ Case Details</div>
+          <div className="account-section-title">Case details</div>
           {canEdit && (
             <button
               className="account-submit" style={{ width: 'auto', padding: '6px 14px', fontSize: 11 }}
@@ -595,7 +596,7 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
 
         <div className="account-field-groups">
           <div className="account-field-group-title">Classification</div>
-          <div className="account-field-group-title">Location &amp; Timeline</div>
+          <div className="account-field-group-title">Location and timeline</div>
           <div>
             <FieldRow label="Incident status" value={incident.incident_status_en} />
             <FieldRow label="Case stage" value={incident.case_stage_en} />
@@ -610,7 +611,7 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
           </div>
 
           <div className="account-field-group-title">Team</div>
-          <div className="account-field-group-title">Contacts &amp; Insurance</div>
+          <div className="account-field-group-title">Contacts and insurance</div>
           <div>
             <FieldRow label="CCC Official" value={incident.ccc_official_en} />
             <FieldRow label="Incident Manager" value={incident.incident_manager_en} />
@@ -627,7 +628,7 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
 
   return (
     <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 4 }}>◈ Edit Case Details</div>
+      <div className="account-section-title" style={{ marginBottom: 4 }}>Edit case details</div>
       <div className="account-form">
         <div className="account-form-section-title">Classification</div>
         <SelectField label="Incident type" value={form.incidentType} onChange={v => set('incidentType', v)} options={types} />
@@ -645,7 +646,7 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
           <textarea className="account-textarea" value={form.description} onChange={e => set('description', e.target.value)} rows={4} />
         </label>
 
-        <div className="account-form-section-title">Location &amp; Timeline</div>
+        <div className="account-form-section-title">Location and timeline</div>
         <label className="account-label">
           Country
           <select className="account-select" value={form.countryCode} onChange={e => set('countryCode', e.target.value)}>
@@ -657,7 +658,7 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
         <TextField label="Date/time request received" value={form.inRequestAt} onChange={v => set('inRequestAt', v)} placeholder="e.g. 2026-09-21 14:32" />
         <TextField label="Date/time case closed" value={form.closedAt} onChange={v => set('closedAt', v)} placeholder="e.g. 2026-09-22 09:00" />
 
-        <div className="account-form-section-title">Patient / Contacts</div>
+        <div className="account-form-section-title">Patient and contacts</div>
         <TextField label="Patient age" value={form.patientAge} onChange={v => set('patientAge', v.replace(/\D/g, ''))} />
         <SelectField label="Patient gender" value={form.patientGender} onChange={v => set('patientGender', v)} options={options?.genders ?? []} />
         <TextField label="Patient phone" value={form.patientPhone} onChange={v => set('patientPhone', v)} />
@@ -724,7 +725,7 @@ function CaseClosureCard({ incident, onSaved }: { incident: IncidentDetail; onSa
 
   return (
     <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 4 }}>◈ Case Closure</div>
+      <div className="account-section-title" style={{ marginBottom: 4 }}>Case closure</div>
       <p className="account-detail-desc-text" style={{ marginBottom: 14 }}>
         This case is marked Done — wrap it up for the record.
       </p>
@@ -818,7 +819,7 @@ export default function IncidentDetailPage() {
       <div className="account-page">
         <div className="account-wrapper account-wrapper--narrow">
           <nav className="account-nav">
-            <Link to="/account" className="account-back">← Back to My Account</Link>
+            <Link to="/account" className="account-back">← Back to your account</Link>
             <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
           </nav>
           <div className="account-card account-card--center">
@@ -837,7 +838,7 @@ export default function IncidentDetailPage() {
       <div className="account-page">
         <div className="account-wrapper account-wrapper--narrow">
           <nav className="account-nav">
-            <Link to="/account" className="account-back">← Back to My Account</Link>
+            <Link to="/account" className="account-back">← Back to your account</Link>
             <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
           </nav>
 
@@ -920,7 +921,7 @@ export default function IncidentDetailPage() {
 
   const isStaffRelation = relation === 'admin' || relation === 'volunteer';
   const backLink = relation === 'admin' ? '/staff/admin-dashboard' : relation === 'volunteer' ? '/staff/volunteer-dashboard' : '/account';
-  const backLabel = isStaffRelation ? '← Back to Dashboard' : '← Back to My Account';
+  const backLabel = isStaffRelation ? '← Back to Dashboard' : '← Back to your account';
 
   // ── Owner or staff (admin/volunteer): full detail + task journey ──────────
   const userTasks  = tasks.filter(t => t.assignee === 'user');
@@ -1018,7 +1019,7 @@ export default function IncidentDetailPage() {
           />
         ) : (
           <div className="account-card">
-            <div className="account-section-title" style={{ marginBottom: 16 }}>◈ Case Journey</div>
+            <div className="account-section-title" style={{ marginBottom: 16 }}>Case journey</div>
             <div className="account-task-columns">
               <TaskList title="Things you need to do" tasks={userTasks} />
               <TaskList title="What Haverim Mehalzim is doing" tasks={staffTasks} />

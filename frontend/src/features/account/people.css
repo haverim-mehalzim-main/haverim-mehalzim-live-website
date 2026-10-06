@@ -1,0 +1,162 @@
+/* ── Calm theme for the people-facing pages ───────────────────────────────
+   Login, sign up, My Account, Open a Call, the incident journey and the join
+   link are used by people in a hard moment, often on a phone. They get a warm,
+   light, unhurried look instead of the dark public-site style. This file only
+   re-points the shared color tokens on the two page roots and softens a few
+   components; auth.css / account.css keep the layout. Staff pages have their
+   own console theme (features/staff/staff.css). */
+
+.auth-page,
+.account-page {
+  --bg-void: #fbf8f3;
+  --bg-surface: #f4efe6;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fdfaf5;
+  --bg-elevated: #f7f3ec;
+  --border-dim: #ece5d8;
+  --border-mid: #e2d9c8;
+  --border-accent: #b6dccd;
+  --text-primary: #2b2a27;
+  --text-secondary: #5a574e;
+  --text-muted: #857f71;
+  --accent-teal: #0f6e56;
+  --accent-teal-dim: #e1f5ee;
+  --accent-red: #b42318;
+  --accent-red-dim: #fdeceb;
+  --accent-amber: #8a5200;
+  --accent-amber-dim: #fdf0d9;
+  --accent-blue: #1d5fa8;
+  --accent-blue-dim: #e6f1fb;
+  --font-mono: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Frame ── */
+.auth-page .auth-nav,
+.account-page .account-nav {
+  border-bottom: none;
+  padding: 20px 0 8px;
+  margin-bottom: 20px;
+}
+.auth-page .auth-back,
+.account-page .account-back { font-size: 14px; letter-spacing: 0; color: var(--text-secondary); }
+.auth-page .auth-back:hover,
+.account-page .account-back:hover { color: var(--accent-teal); }
+.auth-page .auth-nav-brand,
+.account-page .account-nav-brand { font-weight: 600; font-size: 14px; color: var(--text-primary); letter-spacing: 0; }
+.auth-page .auth-nav-brand-dot,
+.account-page .account-nav-brand-dot { box-shadow: none; }
+
+/* ── Cards ── */
+.auth-page .auth-card,
+.account-page .account-card {
+  border-radius: 20px;
+  border-color: var(--border-dim);
+  box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 8px 24px rgba(60, 50, 30, 0.05);
+}
+.auth-page .auth-card { padding: 32px 28px; }
+
+/* ── Type ── */
+.auth-page .auth-eyebrow {
+  font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--accent-teal);
+}
+.auth-page .auth-title { font-size: 26px; font-weight: 600; letter-spacing: -0.015em; }
+.auth-page .auth-sub { font-size: 15px; color: var(--text-secondary); }
+.auth-page .auth-label,
+.account-page .account-label { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); gap: 8px; }
+.auth-page .account-section-title,
+.account-page .account-section-title {
+  font-size: 16px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-primary);
+}
+.account-page .account-task-col-title,
+.account-page .account-detail-desc-label,
+.account-page .account-detail-item-label {
+  font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--text-muted);
+}
+.account-page .account-field-group-title,
+.account-page .account-form-section-title {
+  font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--accent-teal);
+}
+
+/* ── Fields: big enough to tap, and no iOS zoom on focus ── */
+.auth-page .auth-input,
+.account-page .account-input,
+.account-page .account-select,
+.account-page .account-textarea {
+  font-size: 16px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  border-color: var(--border-mid);
+}
+.account-page .account-textarea { font-family: var(--font-display); }
+.auth-page .auth-input:focus,
+.account-page .account-input:focus,
+.account-page .account-select:focus,
+.account-page .account-textarea:focus {
+  border-color: var(--accent-teal);
+  box-shadow: 0 0 0 3px var(--accent-teal-dim);
+}
+.auth-page .password-input-toggle:hover { background: rgba(60, 50, 30, 0.06); }
+
+/* ── Buttons ── */
+.auth-page .auth-submit,
+.account-page .account-submit {
+  padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; letter-spacing: 0;
+  background: var(--accent-teal); color: #ffffff;
+}
+.auth-page .auth-submit--secondary {
+  background: transparent; color: var(--text-secondary); border: 1px solid var(--border-mid);
+}
+.auth-page .auth-submit--secondary:hover:not(:disabled) { background: var(--bg-surface); opacity: 1; }
+.auth-page .account-open-call-btn,
+.account-page .account-open-call-btn {
+  padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #ffffff; background: var(--accent-teal);
+}
+.auth-page .account-premium-cta,
+.account-page .account-premium-cta { border-radius: 999px; color: #ffffff; background: var(--accent-amber); }
+
+/* ── Messages ── */
+.auth-page .auth-banner { font-size: 14px; border-radius: 12px; }
+.auth-page .auth-error,
+.account-page .account-error { font-size: 14px; }
+
+/* ── Role badges and incident cards ── */
+.auth-page .auth-role-badge {
+  text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; padding: 4px 12px;
+}
+.auth-page .account-incident-card,
+.account-page .account-incident-card { border-radius: 16px; padding: 18px; border-color: var(--border-dim); }
+.auth-page .account-incident-card:hover,
+.account-page .account-incident-card:hover { border-color: var(--border-accent); box-shadow: 0 4px 16px rgba(60, 50, 30, 0.06); }
+.auth-page .account-incident-type,
+.account-page .account-incident-type { font-size: 16px; font-weight: 600; }
+.auth-page .account-incident-badge,
+.account-page .account-incident-badge { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; }
+.auth-page .account-incident-badge--past,
+.account-page .account-incident-badge--past,
+.auth-page .account-incident-badge--caller,
+.account-page .account-incident-badge--caller { background: #efe9dd; color: var(--text-secondary); }
+.auth-page .account-incident-meta,
+.account-page .account-incident-meta { font-size: 13px; color: var(--text-muted); }
+.auth-page .account-section-caption,
+.account-page .account-section-caption { font-size: 13px; }
+.auth-page .account-empty,
+.account-page .account-empty { border-radius: 16px; background: transparent; font-size: 14px; padding: 24px 20px; }
+
+/* ── Staff shortcut on My Account ── */
+.auth-page .account-staff-dashboard-link { border-radius: 16px; font-size: 14px; letter-spacing: 0; border-color: var(--border-accent); }
+.auth-page .account-staff-dashboard-link--admin { border-color: #ecd6a4; }
+.auth-page .account-staff-dashboard-link-sub { font-size: 12px; }
+
+/* ── Premium card ── */
+.auth-page .account-premium-card,
+.account-page .account-premium-card { border-radius: 16px; border-color: #ecd6a4; }
+.auth-page .account-premium-title { font-size: 15px; }

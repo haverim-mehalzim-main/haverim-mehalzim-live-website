@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './account.css';
+import './people.css';
 
 export default function OpenCallPage() {
   const { user, loading } = useAuth();
@@ -94,7 +95,7 @@ export default function OpenCallPage() {
       <div className="account-page">
         <div className="account-wrapper account-wrapper--narrow">
           <nav className="account-nav">
-            <Link to="/" className="account-back">← Back to Dashboard</Link>
+            <Link to="/" className="account-back">← Back to the site</Link>
             <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
           </nav>
           <div className="account-card account-card--center">
@@ -112,12 +113,12 @@ export default function OpenCallPage() {
     <div className="account-page">
       <div className="account-wrapper account-wrapper--narrow">
         <nav className="account-nav">
-          <Link to="/account" className="account-back">← Back to My Account</Link>
+          <Link to="/account" className="account-back">← Back to your account</Link>
           <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
         </nav>
 
         <div className="account-card">
-          <div className="account-section-title" style={{ marginBottom: 8 }}>◈ Open a Call</div>
+          <div className="account-section-title" style={{ marginBottom: 8 }}>Open a call</div>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
             Tell us the essentials now so we can open your case right away — a member of our team will
             follow up for any further details we need.
@@ -189,7 +190,7 @@ export default function OpenCallPage() {
               />
             </label>
 
-            <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Patient / missing person details</div>
+            <div className="account-section-title" style={{ marginTop: 8, fontSize: 12 }}>Patient or missing person</div>
 
             <label className="account-label">
               Full name

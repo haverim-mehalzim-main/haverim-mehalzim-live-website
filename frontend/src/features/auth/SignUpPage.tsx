@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
+import '../account/people.css';
 
 type Status = 'idle' | 'submitting' | 'sent' | 'error';
 
@@ -44,7 +45,7 @@ export default function SignUpPage() {
     <div className="auth-page">
       <div className="auth-wrapper">
         <nav className="auth-nav">
-          <Link to="/" className="auth-back">← Back to Dashboard</Link>
+          <Link to="/" className="auth-back">← Back to the site</Link>
           <div className="auth-nav-brand">
             <span className="auth-nav-brand-dot" />
             Haverim Mehalzim
@@ -62,8 +63,8 @@ export default function SignUpPage() {
           </div>
         ) : (
           <div className="auth-card">
-            <div className="auth-eyebrow">◈ Create Your Account</div>
-            <h1 className="auth-title">Sign Up</h1>
+            <div className="auth-eyebrow">Create Your Account</div>
+            <h1 className="auth-title">Sign up</h1>
             <p className="auth-sub">
               Already donated or bought premium? Use that same email to claim your existing
               account and set a password for it.
@@ -105,7 +106,7 @@ export default function SignUpPage() {
               </label>
               {error && <div className="auth-error">{error}</div>}
               <button className="auth-submit" type="submit" disabled={status === 'submitting'}>
-                {status === 'submitting' ? 'Creating account…' : 'Create Account'}
+                {status === 'submitting' ? 'Creating account…' : 'Create account'}
               </button>
             </form>
             <div className="auth-switch">

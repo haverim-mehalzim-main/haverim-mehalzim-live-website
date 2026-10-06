@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import '../auth/auth.css';
+import './people.css';
 
 type LoadState = 'checking' | 'need_login' | 'joining' | 'error';
 
@@ -43,7 +44,7 @@ export default function JoinIncidentPage() {
       <div className="auth-page">
         <div className="auth-wrapper">
           <nav className="auth-nav">
-            <Link to="/" className="auth-back">← Back to Dashboard</Link>
+            <Link to="/" className="auth-back">← Back to the site</Link>
             <div className="auth-nav-brand">
               <span className="auth-nav-brand-dot" />
               Haverim Mehalzim
@@ -74,7 +75,7 @@ export default function JoinIncidentPage() {
       <div className="auth-page">
         <div className="auth-wrapper">
           <nav className="auth-nav">
-            <Link to="/" className="auth-back">← Back to Dashboard</Link>
+            <Link to="/" className="auth-back">← Back to the site</Link>
             <div className="auth-nav-brand">
               <span className="auth-nav-brand-dot" />
               Haverim Mehalzim
@@ -83,7 +84,7 @@ export default function JoinIncidentPage() {
           <div className="auth-card auth-card--center">
             <p className="auth-sub">{error}</p>
             <Link to="/account" className="auth-submit" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Go to My Account
+              Go to your account
             </Link>
           </div>
         </div>

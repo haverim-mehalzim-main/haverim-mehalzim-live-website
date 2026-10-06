@@ -503,8 +503,8 @@
   border-radius: 2px;
   flex-shrink: 0;
 }
-.account-journey-connector.filled { background: var(--journey-accent); }
-.account-journey-connector.empty  { background: var(--border-mid); }
+.account-journey-connector--filled { background: var(--journey-accent); }
+.account-journey-connector--empty  { background: var(--border-mid); }
 
 .account-journey-step {
   display: flex;
