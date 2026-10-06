@@ -1,13 +1,6 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-
-const MONO = "'JetBrains Mono', 'Courier New', monospace";
-const BG   = '#06090f';
-const BG2  = '#0c1420';
-const TEAL = '#00c9b1';
-const AMBER = '#ffb930';
-const RED = '#f87171';
+import { StaffGate, StaffShell } from './StaffShell';
+import { useStaffData } from './useStaffData';
 
 interface VolunteerRequester {
   request_id: number;
@@ -29,41 +22,40 @@ interface AdminDashboardData {
   }[];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  'New Request by User': TEAL,
-  'Working on it': AMBER,
-  'Done': 'rgba(255,255,255,0.35)',
-  'Rejected': RED,
+const STATUS_TONES: Record<string, string> = {
+  'New Request by User': 'accent',
+  'Working on it': 'amber',
+  'Done': 'green',
+  'Rejected': 'red',
 };
 
-// Pipeline stages an admin can click through to a full triage/working queue
-// for — the rest (Done, Rejected) are just informational counts.
+// The server returns JSON keys alphabetically; the pipeline reads in this order.
+const STATUS_ORDER = ['New Request by User', 'Working on it', 'Done', 'Rejected'];
+const orderedStatuses = (counts: Record<string, number>) =>
+  Object.entries(counts).sort(([a], [b]) => {
+    const ia = STATUS_ORDER.indexOf(a);
+    const ib = STATUS_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+// Pipeline stages an admin can open as a full queue; Done and Rejected are
+// just counts.
 const STATUS_LINKS: Record<string, string> = {
   'New Request by User': '/staff/requests',
   'Working on it': '/staff/in-progress',
 };
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function WorkloadColumn({ title, data }: { title: string; data: [string, number][] }) {
   return (
-    <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: TEAL, marginBottom: '1.1rem' }}>
-      ◈ {children}
-    </div>
-  );
-}
-
-function WorkloadList({ title, data }: { title: string; data: [string, number][] }) {
-  return (
-    <div style={{ flex: '1 1 200px', minWidth: 200 }}>
-      <div style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>
-        {title}
-      </div>
+    <div className="staff-col">
+      <div className="staff-col-title">{title}</div>
       {data.length === 0 ? (
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>No active cases assigned.</div>
+        <div className="staff-row-meta">No active cases assigned.</div>
       ) : (
         data.map(([name, count]) => (
-          <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
-            <span style={{ color: '#e2e8f0' }}>{name}</span>
-            <span style={{ color: TEAL, fontWeight: 700 }}>{count}</span>
+          <div key={name} className="staff-kv">
+            <span>{name}</span>
+            <strong>{count}</strong>
           </div>
         ))
       )}
@@ -72,154 +64,91 @@ function WorkloadList({ title, data }: { title: string; data: [string, number][]
 }
 
 function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const hours = Math.floor(ms / 3_600_000);
+  const hours = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
   if (hours < 1) return 'just now';
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function StaffAdminDashboardPage() {
-  const { user, loading: authLoading } = useAuth();
-  const [data, setData] = useState<AdminDashboardData | null>(null);
-  const [error, setError] = useState('');
-
-  const isAdmin = user?.primary_role === 'admin';
-
-  if (authLoading) {
-    return <div style={{ minHeight: '100dvh', background: BG }} />;
-  }
-
-  if (!user) {
-    return (
-      <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: BG2, border: '1px solid rgba(0,201,177,0.14)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: TEAL, marginBottom: '1rem' }}>◈ Admin Dashboard</div>
-          <p style={{ fontSize: 13, marginBottom: '1.25rem' }}>Log in with an admin account to continue.</p>
-          <Link to="/login?next=/staff/admin-dashboard" style={{
-            display: 'inline-block', padding: '0.75rem 1.5rem', background: TEAL, color: BG,
-            borderRadius: 8, fontFamily: MONO, fontSize: 11, fontWeight: 700, textDecoration: 'none',
-          }}>Log In →</Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: BG2, border: '1px solid rgba(255,77,106,0.2)', borderRadius: 14, padding: '2rem', maxWidth: 380, textAlign: 'center' }}>
-          <p style={{ fontSize: 13 }}>This dashboard is admin-only.</p>
-          <Link to="/staff/volunteer-dashboard" style={{ fontSize: 11, color: TEAL }}>← Back to Dashboard</Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (data === null) {
-    fetch('/api/staff/admin-dashboard')
-      .then(r => {
-        if (r.status === 403) { setError('Forbidden'); return null; }
-        return r.json();
-      })
-      .then(j => { if (j?.success) setData(j); else if (j) setError('Failed to load.'); })
-      .catch(() => setError('Network error.'));
-  }
+function AdminDashboard() {
+  const { data, error } = useStaffData<AdminDashboardData>('/api/staff/admin-dashboard');
 
   return (
-    <div style={{ minHeight: '100dvh', background: BG, color: '#e2e8f0', fontFamily: MONO }}>
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 10, background: `${BG}ee`, backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(0,201,177,0.12)', padding: '1rem 1.5rem',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 8,
-      }}>
-        <div style={{ whiteSpace: 'nowrap' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Haverim Mehalzim</span>
-          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em', marginLeft: 12 }}>ADMIN DASHBOARD</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Link to="/account" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← My Account</Link>
-        </div>
-      </div>
+    <StaffShell
+      title="Admin dashboard"
+      subtitle={data ? `${data.total_incidents} incidents on the board` : undefined}
+    >
+      {error && <div className="staff-error">{error}</div>}
+      {!data && !error && <div className="staff-loading">Loading…</div>}
 
-      <div style={{ maxWidth: 780, margin: '0 auto', padding: '2.5rem 1.5rem 5rem' }}>
-        {error && <div style={{ color: RED, fontSize: 12, marginBottom: 16 }}>{error}</div>}
-        {data === null && !error && <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>Loading…</div>}
-
-        {data !== null && (
-          <>
-            <div style={{ marginBottom: '2.5rem' }}>
-              <SectionTitle>Pipeline ({data.total_incidents} total on the board)</SectionTitle>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {Object.entries(data.incident_status_counts).map(([status, count]) => {
-                  const tileStyle: React.CSSProperties = {
-                    flex: '1 1 100px', background: BG2, border: `1px solid ${STATUS_COLORS[status] ?? 'rgba(255,255,255,0.1)'}44`,
-                    borderRadius: 10, padding: '14px 12px', textAlign: 'center', textDecoration: 'none', display: 'block',
-                  };
-                  const inner = (
-                    <>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: STATUS_COLORS[status] ?? '#e2e8f0' }}>{count}</div>
-                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: '0.04em' }}>{status}</div>
-                    </>
-                  );
-                  return STATUS_LINKS[status] ? (
-                    <Link key={status} to={STATUS_LINKS[status]} style={tileStyle}>{inner}</Link>
-                  ) : (
-                    <div key={status} style={tileStyle}>{inner}</div>
-                  );
-                })}
-              </div>
+      {data && (
+        <>
+          <section className="staff-section">
+            <h2 className="staff-section-title">Pipeline</h2>
+            <div className="staff-stats">
+              {orderedStatuses(data.incident_status_counts).map(([status, count]) => {
+                const inner = (
+                  <>
+                    <div className="staff-stat-label">{status}</div>
+                    <div className="staff-stat-num">{count}</div>
+                    {STATUS_LINKS[status] && <div className="staff-stat-hint">Open queue →</div>}
+                  </>
+                );
+                return STATUS_LINKS[status] ? (
+                  <Link key={status} to={STATUS_LINKS[status]} className="staff-stat" data-tone={STATUS_TONES[status]}>{inner}</Link>
+                ) : (
+                  <div key={status} className="staff-stat" data-tone={STATUS_TONES[status]}>{inner}</div>
+                );
+              })}
             </div>
+          </section>
 
-            <div style={{ marginBottom: '2.5rem' }}>
-              <SectionTitle>Workload (active, non-Done cases)</SectionTitle>
-              <div style={{ background: BG2, border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '1.25rem', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                <WorkloadList title="CCC Officials" data={data.ccc_workload} />
-                <WorkloadList title="Incident Managers" data={data.manager_workload} />
-                <WorkloadList title="Supervisors" data={data.supervisor_workload} />
-              </div>
+          <section className="staff-section">
+            <h2 className="staff-section-title">Workload on active cases</h2>
+            <div className="staff-card staff-cols">
+              <WorkloadColumn title="CCC officials" data={data.ccc_workload} />
+              <WorkloadColumn title="Incident managers" data={data.manager_workload} />
+              <WorkloadColumn title="Supervisors" data={data.supervisor_workload} />
             </div>
+          </section>
 
-            <div>
-              <SectionTitle>
-                Volunteer Approvals {data.pending_volunteer_total > 0 ? `(${data.pending_volunteer_total} pending)` : ''}
-              </SectionTitle>
+          <section className="staff-section">
+            <h2 className="staff-section-title">
+              Volunteer approvals{data.pending_volunteer_total > 0 ? ` · ${data.pending_volunteer_total} waiting` : ''}
+            </h2>
+            <div className="staff-card">
               {data.pending_volunteer_incidents.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.2)', fontSize: 12, background: BG2, borderRadius: 10, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  No volunteers waiting on approval right now.
-                </div>
+                <div className="staff-empty">No volunteers are waiting for approval.</div>
               ) : (
-                <div style={{ background: BG2, border: '1px solid rgba(255,185,48,0.25)', borderRadius: 10, padding: '0.5rem 1.25rem' }}>
-                  {data.pending_volunteer_incidents.map(p => (
-                    <div key={p.incident_id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      <Link
-                        to={`/incidents/${p.incident_id}`}
-                        style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, textDecoration: 'none', color: 'inherit' }}
-                      >
-                        <span style={{ color: '#e2e8f0', fontWeight: 700 }}>{p.incident_name}</span>
-                        <span style={{ color: AMBER }}>
-                          {p.count} waiting · oldest {timeAgo(p.oldest_requested_at)}
-                        </span>
-                      </Link>
-                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {p.requesters.map(r => (
-                          <Link
-                            key={r.request_id} to={`/incidents/${p.incident_id}`}
-                            style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, textDecoration: 'none', color: 'rgba(255,255,255,0.5)', paddingLeft: 10 }}
-                          >
-                            <span>↳ {r.full_name || 'Unknown'} · {r.email}</span>
-                            <span>{timeAgo(r.requested_at)}</span>
-                          </Link>
-                        ))}
+                data.pending_volunteer_incidents.map(p => (
+                  <div key={p.incident_id}>
+                    <Link to={`/incidents/${p.incident_id}`} className="staff-row">
+                      <div className="staff-row-main">
+                        <div className="staff-row-title">{p.incident_name}</div>
+                        <div className="staff-row-meta">Oldest request {timeAgo(p.oldest_requested_at)}</div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                      <div className="staff-row-end">
+                        <span className="staff-badge" data-tone="amber">{p.count} waiting</span>
+                        <span className="staff-chevron">›</span>
+                      </div>
+                    </Link>
+                    {p.requesters.map(r => (
+                      <div key={r.request_id} className="staff-subrow">
+                        <span>{r.full_name || 'Unknown'} · {r.email}</span>
+                        <span>{timeAgo(r.requested_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))
               )}
             </div>
-          </>
-        )}
-      </div>
-    </div>
+          </section>
+        </>
+      )}
+    </StaffShell>
   );
+}
+
+export default function StaffAdminDashboardPage() {
+  return <StaffGate allow="admin"><AdminDashboard /></StaffGate>;
 }

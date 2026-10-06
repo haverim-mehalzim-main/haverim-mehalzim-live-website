@@ -60,8 +60,8 @@ export default function App() {
         <Route path="/admin/feedback"  element={<AdminFeedbackPage />} />
         <Route path="/staff/volunteer-dashboard" element={<StaffVolunteerDashboardPage />} />
         <Route path="/staff/admin-dashboard"     element={<StaffAdminDashboardPage />} />
-        <Route path="/staff/requests" element={<StaffIncidentQueuePage status="New Request by User" title="New Requests Awaiting Approval" triage />} />
-        <Route path="/staff/in-progress" element={<StaffIncidentQueuePage status="Working on it" title="In Progress" allowVolunteer />} />
+        <Route path="/staff/requests" element={<StaffIncidentQueuePage status="New Request by User" title="New requests" triage />} />
+        <Route path="/staff/in-progress" element={<StaffIncidentQueuePage status="Working on it" title="In progress" allowVolunteer />} />
         <Route path="/staff/participated" element={<StaffParticipatedIncidentsPage />} />
         <Route path="/staff/monday/:mondayItemId" element={<MondayIncidentDetailPage />} />
         <Route path="/my-impact/:token" element={<DonorImpactPage />} />
