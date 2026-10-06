@@ -4,7 +4,7 @@ import { DonateProvider } from './context/DonateContext';
 import { AuthProvider } from './context/AuthContext';
 import DashboardPage from './features/dashboard/DashboardPage';
 import FundOurTeamPage from './features/fund/FundOurTeamPage';
-import CaseTrackerPage from './features/tracker/CaseTrackerPage';
+import TrackAccessPage from './features/tracker/TrackAccessPage';
 import AdminFeedbackPage from './features/admin/AdminFeedbackPage';
 import StaffVolunteerDashboardPage from './features/staff/StaffVolunteerDashboardPage';
 import StaffAdminDashboardPage from './features/staff/StaffAdminDashboardPage';
@@ -56,7 +56,7 @@ export default function App() {
           </Suspense>
         } />
         <Route path="/fund-our-team" element={<FundOurTeamPage />} />
-        <Route path="/track/:caseId"   element={<CaseTrackerPage />} />
+        <Route path="/track/:caseId"   element={<TrackAccessPage />} />
         <Route path="/admin/feedback"  element={<AdminFeedbackPage />} />
         <Route path="/staff/volunteer-dashboard" element={<StaffVolunteerDashboardPage />} />
         <Route path="/staff/admin-dashboard"     element={<StaffAdminDashboardPage />} />

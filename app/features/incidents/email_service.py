@@ -12,7 +12,8 @@ The thank-you email carries three things the donor asked for:
      (the same token stored on the Donors board; lets them see their lifetime
      impact at any time — the link never changes).
   3. A link to follow the specific incident they funded  →  /track/<incident_id>
-     (the public case-tracker page). Omitted when the donation is not tied to a
+     (the case tracker: the donor signs up or logs in first, and a confirmed gift
+     for that incident is what lets them in). Omitted when the donation is not tied to a
      specific incident.
 
 Config (app.config):

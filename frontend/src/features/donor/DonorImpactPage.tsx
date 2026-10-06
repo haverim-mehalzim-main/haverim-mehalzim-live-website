@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDonate } from '../../context/DonateContext';
 import './donor.css';
-import '../account/people.css';
 
 const DONATE_URL     = 'https://www.jgive.com/new/en/usd/donation-targets/110214';
 const AVG_MISSION_COST = 150;
@@ -112,7 +111,7 @@ export default function DonorImpactPage() {
           </div>
         </nav>
         <div className="donor-not-found">
-          <div className="donor-not-found-icon">◈</div>
+          <div className="donor-not-found-icon" aria-hidden="true">?</div>
           <h2>{state === 'not_found' ? 'Impact page not found' : 'Something went wrong'}</h2>
           <p>
             {state === 'not_found'
@@ -130,12 +129,12 @@ export default function DonorImpactPage() {
   const months  = monthsAgo(d.first_donation_date);
   const today   = new Date().toLocaleDateString('en-GB', { month: 'long', day: 'numeric', year: 'numeric' });
   const firstName = d.name.split(' ')[0];
+  const hasWindow = !!d.first_donation_date;
 
   return (
     <div className="donor-page">
       <div className="donor-page-wrapper">
 
-        {/* Nav */}
         <nav className="donor-nav">
           <Link to="/" className="donor-back">← Back to the site</Link>
           <div className="donor-nav-brand">
@@ -144,145 +143,121 @@ export default function DonorImpactPage() {
           </div>
         </nav>
 
-        {/* Hero */}
         <div className="donor-hero">
           <div className="donor-hero-eyebrow">Your personal impact report</div>
-          <h1 className="donor-hero-name">
-            Welcome back,<br />
-            <span className="donor-hero-name-highlight">{d.name}</span>
-          </h1>
+          <h1 className="donor-hero-name">Thank you, {firstName}</h1>
           <p className="donor-hero-sub">
-            Your generosity has directly powered emergency operations — every dollar went to our
+            Your generosity has directly powered emergency operations. Every dollar went to our
             volunteers on the ground, responding to Israelis in crisis around the world.
           </p>
           {(d.first_donation_date || d.last_donation_date) && (
             <div className="donor-hero-dates">
               {d.first_donation_date && (
-                <span className="donor-date-chip">
-                  <span className="donor-date-label">First donated</span>
-                  {formatDate(d.first_donation_date)}
-                </span>
+                <span className="donor-date-chip">Giving since <strong>{formatDate(d.first_donation_date)}</strong></span>
               )}
               {d.last_donation_date && d.last_donation_date !== d.first_donation_date && (
-                <span className="donor-date-chip">
-                  <span className="donor-date-label">Most recent gift</span>
-                  {formatDate(d.last_donation_date)}
-                </span>
+                <span className="donor-date-chip">Latest gift <strong>{formatDate(d.last_donation_date)}</strong></span>
               )}
             </div>
           )}
         </div>
 
-        {/* KPI strip */}
-        <div className="donor-kpi-strip">
-          <div className="donor-kpi-card teal">
-            <div className="donor-kpi-value">
-              <span>$</span><CountUp to={Math.round(d.total_donated)} />
-            </div>
-            <div className="donor-kpi-label">Total donated</div>
-          </div>
-          <div className="donor-kpi-card teal">
-            <div className="donor-kpi-value">
-              <CountUp to={d.missions_funded} />
-            </div>
-            <div className="donor-kpi-label">Missions funded</div>
-            <div className="donor-kpi-sub">${AVG_MISSION_COST} per mission</div>
-          </div>
-          {d.first_donation_date && (
-            <>
-              <div className="donor-kpi-card">
-                <div className="donor-kpi-value">
-                  <CountUp to={d.handled_since} />
-                </div>
-                <div className="donor-kpi-label">Cases managed</div>
-                <div className="donor-kpi-sub">since your first gift</div>
+        <section className="donor-big">
+          <div className="donor-big-num"><CountUp to={d.missions_funded} /></div>
+          <div className="donor-big-label">missions funded</div>
+          <p className="donor-big-sub">
+            Your <strong>$<CountUp to={Math.round(d.total_donated)} /></strong> in total gifts, at about ${AVG_MISSION_COST} per mission.
+          </p>
+        </section>
+
+        {hasWindow && (
+          <div className="donor-stats">
+            <div className="donor-stat">
+              <div className="donor-stat-num"><CountUp to={d.incidents_since} /></div>
+              <div className="donor-stat-body">
+                <div className="donor-stat-label">Cases received</div>
+                <div className="donor-stat-sub">since your first gift</div>
               </div>
-              <div className="donor-kpi-card gold">
-                <div className="donor-kpi-value">
-                  <CountUp to={d.lives_saved_since} />
-                </div>
-                <div className="donor-kpi-label">Life-threatening cases</div>
-                <div className="donor-kpi-sub">stabilized in your window</div>
+            </div>
+            <div className="donor-stat donor-stat--teal">
+              <div className="donor-stat-num"><CountUp to={d.handled_since} /></div>
+              <div className="donor-stat-body">
+                <div className="donor-stat-label">Cases managed</div>
+                <div className="donor-stat-sub">by our volunteer team</div>
               </div>
-            </>
-          )}
-        </div>
-
-        {/* Impact window — only shown when first_donation_date is known */}
-        {d.first_donation_date && <div className="donor-window">
-          <div className="donor-window-header">
-            <div className="donor-window-eyebrow">Your impact window</div>
-            <div className="donor-window-period">{months} month{months !== 1 ? 's' : ''} of operations</div>
-          </div>
-
-          {/* Timeline */}
-          <div className="donor-window-timeline">
-            <div className="donor-timeline-start-block">
-              <div className="donor-timeline-dot teal" />
-              <div className="donor-timeline-date">{formatDate(d.first_donation_date)}</div>
-              <div className="donor-timeline-label">First gift</div>
             </div>
-            <div className="donor-timeline-track">
-              <div className="donor-timeline-fill" />
-              <div className="donor-timeline-badge">{d.incidents_since.toLocaleString()} incidents responded</div>
+            <div className="donor-stat donor-stat--gold">
+              <div className="donor-stat-num"><CountUp to={d.lives_saved_since} /></div>
+              <div className="donor-stat-body">
+                <div className="donor-stat-label">Life-threatening cases</div>
+                <div className="donor-stat-sub">where we stepped in</div>
+              </div>
             </div>
-            <div className="donor-timeline-end-block">
-              <div className="donor-timeline-dot amber" />
-              <div className="donor-timeline-date">{today}</div>
-              <div className="donor-timeline-label">Today</div>
-            </div>
-          </div>
-
-          {/* Stats breakdown */}
-          <div className="donor-window-stats">
-            <div className="donor-window-stat">
-              <span className="donor-window-num">{d.incidents_since.toLocaleString()}</span>
-              <span className="donor-window-text">total incidents received since your first donation</span>
-            </div>
-            <div className="donor-window-stat">
-              <span className="donor-window-num teal">{d.handled_since.toLocaleString()}</span>
-              <span className="donor-window-text">cases fully managed and closed by our volunteer team</span>
-            </div>
-            <div className="donor-window-stat">
-              <span className="donor-window-num gold">{d.lives_saved_since.toLocaleString()}</span>
-              <span className="donor-window-text">life-threatening situations where our team intervened</span>
-            </div>
-          </div>
-        </div>}
-
-        {/* Personal note */}
-        {d.note && (
-          <div className="donor-note">
-            <div className="donor-note-eyebrow">A personal message from our team</div>
-            <blockquote className="donor-note-text">{d.note}</blockquote>
           </div>
         )}
 
-        {/* CTA */}
-        <div className="donor-cta">
-          <div className="donor-cta-headline">Thank you, {firstName}.</div>
-          <div className="donor-cta-sub">
+        {hasWindow && (
+          <section className="donor-window">
+            <div className="donor-window-head">
+              <h2 className="donor-window-title">Your impact window</h2>
+              <div className="donor-window-period">{months} month{months !== 1 ? 's' : ''} of operations</div>
+            </div>
+
+            <div className="donor-timeline">
+              <div>
+                <div className="donor-timeline-dot" />
+                <div className="donor-timeline-date">{formatDate(d.first_donation_date)}</div>
+                <div className="donor-timeline-label">First gift</div>
+              </div>
+              <div className="donor-timeline-track">
+                <div className="donor-timeline-badge">{d.incidents_since.toLocaleString()} cases responded to</div>
+              </div>
+              <div className="donor-timeline-end">
+                <div className="donor-timeline-dot" />
+                <div className="donor-timeline-date">{today}</div>
+                <div className="donor-timeline-label">Today</div>
+              </div>
+            </div>
+
+            <div className="donor-window-list">
+              <div className="donor-window-row">
+                <span className="donor-window-row-num">{d.incidents_since.toLocaleString()}</span>
+                <span className="donor-window-row-text">cases received since your first donation</span>
+              </div>
+              <div className="donor-window-row">
+                <span className="donor-window-row-num donor-window-row-num--teal">{d.handled_since.toLocaleString()}</span>
+                <span className="donor-window-row-text">cases fully managed and closed by our volunteer team</span>
+              </div>
+              <div className="donor-window-row">
+                <span className="donor-window-row-num donor-window-row-num--gold">{d.lives_saved_since.toLocaleString()}</span>
+                <span className="donor-window-row-text">life-threatening situations where our team stepped in</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {d.note && (
+          <section className="donor-note">
+            <div className="donor-note-eyebrow">A personal message from our team</div>
+            <blockquote className="donor-note-text">{d.note}</blockquote>
+          </section>
+        )}
+
+        <section className="donor-cta">
+          <h2 className="donor-cta-headline">We could not do this without you.</h2>
+          <p className="donor-cta-sub">
             Your support makes it possible for us to answer the call every time, for every Israeli.
-            The work continues — and so can your impact.
-          </div>
+            The work continues, and so can your impact.
+          </p>
           <div className="donor-cta-actions">
             <a href={DONATE_URL} onClick={e => { e.preventDefault(); openDonate(); }} className="donor-cta-donate">
-              ♥ Donate Again
+              Donate again
             </a>
-            {/* <Link
-              to={`/leaderboard?you=${encodeURIComponent(firstName)}`}
-              className="donor-cta-share"
-            >
-              See Leaderboard
-            </Link> */}
-            <button
-              className={`donor-cta-share${copied ? ' copied' : ''}`}
-              onClick={handleShare}
-            >
-              {copied ? '✓ Link Copied' : '⤴ Share This Page'}
+            <button className={`donor-cta-share${copied ? ' copied' : ''}`} onClick={handleShare}>
+              {copied ? 'Link copied' : 'Share this page'}
             </button>
           </div>
-        </div>
+        </section>
 
       </div>
     </div>

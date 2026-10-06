@@ -13,7 +13,7 @@ import secrets
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models import Incident, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer
+from app.models import Incident, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer, Payment, PaymentStatus
 from app.services.account_service import grant_role
 
 
@@ -310,3 +310,20 @@ def count_approved_volunteer_incidents(user_id: int) -> int:
         .filter(IncidentVolunteer.user_id == user_id, IncidentVolunteer.approved_at.isnot(None))
         .count()
     )
+
+
+# ── Donors following the case they funded ───────────────────────────────────
+
+def user_funded_incident(user_id: int, monday_item_id: str) -> bool:
+    """True if this user has a confirmed donation earmarked for this Monday
+    item — the donor thank-you email links them to follow that case, so a
+    confirmed gift is the relationship that lets them see its progress."""
+    return (
+        Payment.query
+        .filter(
+            Payment.user_id == user_id,
+            Payment.monday_item_id == str(monday_item_id),
+            Payment.status == PaymentStatus.CONFIRMED,
+        )
+        .first()
+    ) is not None

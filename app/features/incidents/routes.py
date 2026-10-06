@@ -83,9 +83,6 @@ _donor_rate: dict = defaultdict(lambda: {'count': 0, 'window_start': 0.0})
 _DONOR_RATE_MAX    = 20    # donor pages are shared links — generous limit
 _DONOR_RATE_WINDOW = 60
 
-_track_rate: dict = defaultdict(lambda: {'count': 0, 'window_start': 0.0})
-_TRACK_RATE_MAX    = 30
-_TRACK_RATE_WINDOW = 60
 
 
 def _check_admin_token(request, stored_token: str | None) -> bool:
@@ -257,25 +254,40 @@ def debug_locations():
 
 @incidents_bp.route('/api/track/<item_id>')
 def get_case_tracking(item_id):
-    from flask import request as _req
-    ip  = _req.remote_addr or 'unknown'
-    now = _time.time()
-    bucket = _track_rate[ip]
-    if now - bucket['window_start'] > _TRACK_RATE_WINDOW:
-        bucket['count'] = 0
-        bucket['window_start'] = now
-    bucket['count'] += 1
-    if bucket['count'] > _TRACK_RATE_MAX:
-        return jsonify({'success': False, 'message': 'Too many requests'}), 429
+    """Where a case-tracker link (e.g. the one in a donor's thank-you email)
+    should take the signed-in person. The tracker is not public: it needs an
+    account, and access comes from a real relationship to the case — its
+    opener, someone who joined by invitation link, staff, or a donor who
+    funded it. Anyone else is refused, so case numbers can't be guessed into
+    a progress page. Returns the incident page to open."""
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please sign up or log in first.'}), 401
 
     if not item_id.isdigit():
         return jsonify({'success': False, 'message': 'Invalid case ID'}), 400
 
-    case_data = fetch_case_status(item_id)
-    if case_data is None:
-        return jsonify({'success': False, 'message': 'Case not found'}), 404
+    incident = Incident.query.filter_by(monday_item_id=item_id).one_or_none()
+    if incident is None:
+        # Not mirrored locally yet. Only a donor of this exact case gets that
+        # far, and only if the item really exists on Monday.
+        if incident_service.user_funded_incident(user.id, item_id) and fetch_incidents_by_ids([item_id]):
+            incident_service.sync_local_incidents_from_monday([{'id': item_id}])
+            db.session.commit()
+            incident = Incident.query.filter_by(monday_item_id=item_id).one_or_none()
+    if incident is None:
+        return jsonify({'success': False, 'message': 'No access to this case.'}), 403
 
-    return jsonify({'success': True, 'data': case_data}), 200
+    allowed = (
+        user_has_role(user, 'admin', 'volunteer')
+        or incident.user_id == user.id
+        or IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None
+        or incident_service.user_funded_incident(user.id, item_id)
+    )
+    if not allowed:
+        return jsonify({'success': False, 'message': 'No access to this case.'}), 403
+
+    return jsonify({'success': True, 'incident_id': incident.id}), 200
 
 
 @incidents_bp.route('/api/feedback', methods=['POST'])
@@ -1099,7 +1111,12 @@ def incident_detail(local_id):
         relation = 'owner'
     elif user_has_role(user, 'volunteer'):
         relation = 'volunteer'
-    elif IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None:
+    elif (
+        IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).first() is not None
+        or incident_service.user_funded_incident(user.id, incident.monday_item_id)
+    ):
+        # Joined by invitation, or a donor who funded this case: the calm
+        # progress view, never operational detail.
         relation = 'follower'
     else:
         return jsonify({'success': False, 'message': 'Not found'}), 404

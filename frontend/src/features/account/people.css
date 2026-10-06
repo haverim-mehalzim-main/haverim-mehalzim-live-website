@@ -9,8 +9,7 @@
 .auth-page,
 .account-page,
 .premium-page,
-.pay-page,
-.donor-page {
+.pay-page {
   --bg-void: #fbf8f3;
   --bg-surface: #f4efe6;
   --bg-card: #ffffff;
@@ -218,29 +217,6 @@
 .pay-btn--ghost { background: transparent; color: var(--text-primary); border-color: var(--border-mid); }
 .pay-btn--ghost:hover { background: var(--bg-surface); }
 
-/* ── Donor impact report ────────────────────────────────────────────────── */
-.donor-page::before { display: none; }
-.donor-page { --gold: #8a6500; font-family: var(--font-display); }
-.donor-page .donor-nav { border-bottom: none; padding: 20px 0 8px; margin-bottom: 28px; }
-.donor-page .donor-back { font-family: var(--font-display); font-size: 14px; letter-spacing: 0; color: var(--text-secondary); }
-.donor-page .donor-nav-brand { font-weight: 600; letter-spacing: 0; color: var(--text-primary); }
-.donor-page .donor-nav-brand-dot { box-shadow: none; }
-.donor-page .donor-hero-eyebrow, .donor-page .donor-kpi-label, .donor-page .donor-note-label {
-  font-family: var(--font-display); text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500;
-}
-.donor-page .donor-kpi-card,
-.donor-page .donor-note,
-.donor-page .donor-cta { box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 8px 24px rgba(60, 50, 30, 0.05); }
-.donor-page .donor-kpi-card.gold .donor-kpi-value,
-.donor-page .donor-window-num.gold { color: var(--gold); }
-.donor-page .donor-kpi-card.gold { border-color: #ecd6a4; background: #fffaf0; }
-.donor-page .donor-kpi-card.teal { background: #f3faf7; }
-.donor-page .donor-note { background: #fffaf0; border-color: #ecd6a4; }
-.donor-page .donor-note-label { color: var(--gold); }
-.donor-page .donor-cta { background: #f3faf7; }
-.donor-page .donor-cta-donate { color: #ffffff; }
-.donor-page .donor-timeline-dot.teal, .donor-page .donor-timeline-dot.amber { box-shadow: none; }
-
 /* ── Open a call: a guided form for someone in a hard moment ────────────── */
 .account-page .call-hero { margin: 4px 0 22px; }
 .account-page .call-title {
@@ -341,3 +317,46 @@
   .account-page .call-row { grid-template-columns: 1fr; }
   .account-page .call-title, .auth-page .join-title { font-size: 27px; }
 }
+
+/* ── Family: following a shared case ────────────────────────────────────── */
+.account-page .family-header { text-align: center; padding: 8px 0 4px; }
+.account-page .family-eyebrow { font-size: 13px; font-weight: 500; color: var(--accent-teal); margin-bottom: 6px; }
+.account-page .family-title {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-size: 34px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 8px; overflow-wrap: anywhere;
+}
+.account-page .family-meta { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--text-muted); font-size: 14px; }
+.account-page .family-status {
+  padding: 3px 10px; border-radius: 999px; background: var(--accent-teal-dim); color: var(--accent-teal); font-size: 12px; font-weight: 600;
+}
+.account-page .family-status--done { background: #efe9dd; color: var(--text-secondary); }
+.account-page .family-empty { text-align: center; color: var(--text-secondary); padding: 40px 0 8px; }
+.account-page .family-foot { margin-top: 36px; text-align: center; font-size: 13px; color: var(--text-muted); max-width: 30em; margin-left: auto; margin-right: auto; }
+
+/* ── Share card: invite family and friends ──────────────────────────────── */
+.account-page .share-card {
+  text-align: center; padding: 28px 22px; border-radius: 24px; background: var(--bg-card); border: 1px solid var(--border-dim);
+  box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 8px 24px rgba(60, 50, 30, 0.05);
+}
+.account-page .share-icon {
+  width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; font-size: 24px;
+  background: radial-gradient(circle, #ffffff 0%, var(--accent-teal-dim) 75%);
+}
+.account-page .share-title {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-size: 22px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 8px;
+}
+.account-page .share-text { color: var(--text-secondary); font-size: 14px; max-width: 28em; margin: 0 auto 18px; }
+.account-page .share-link { display: flex; gap: 8px; margin-bottom: 10px; }
+.account-page .share-link .account-input { flex: 1; min-width: 0; font-size: 14px; }
+.account-page .share-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.account-page .share-btn {
+  display: inline-flex; align-items: center; justify-content: center; padding: 11px 20px; border-radius: 999px;
+  border: 1px solid var(--border-mid); background: #ffffff; color: var(--text-primary);
+  font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.account-page .share-btn:hover { border-color: var(--accent-teal); color: var(--accent-teal); }
+.account-page .share-btn--solid { background: var(--accent-teal); border-color: var(--accent-teal); color: #ffffff; }
+.account-page .share-btn--solid:hover { background: #0b5a46; color: #ffffff; }
+.account-page .share-btn--wide { width: 100%; }
+.account-page .share-btn:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState } from '../../components/caseJourneySteps';
+import CaseJourney from '../../components/CaseJourney';
+import CaseCompletion from '../../components/CaseCompletion';
 import './account.css';
 import './people.css';
 import { StaffShell } from '../staff/StaffShell';
 
 interface IncidentDetail {
   id: number;
+  monday_item_id?: string;
   incident_type: string;
   location: string;
   description?: string;
@@ -110,62 +112,6 @@ function TaskList({ title, tasks }: { title: string; tasks: Task[] }) {
   );
 }
 
-// ── Family/friend: the case journey as a ring + connected step timeline ─────
-const JOURNEY_RADIUS = 52;
-const JOURNEY_CIRC = 2 * Math.PI * JOURNEY_RADIUS;
-
-function FamilyJourneyCard({ progress }: {
-  progress: { step: number; step_title: string; step_subtitle: string; total_steps: number; is_sensitive: boolean };
-}) {
-  const steps = progress.is_sensitive ? CASE_JOURNEY_STEPS_SENSITIVE : CASE_JOURNEY_STEPS;
-  const current = Math.min(Math.max(progress.step, 1), progress.total_steps);
-  const offset = JOURNEY_CIRC * (1 - current / progress.total_steps);
-
-  return (
-    <div className={`account-journey${progress.is_sensitive ? ' sensitive' : ''}`}>
-      <div className="account-journey-ring-wrap">
-        <svg className="account-journey-ring-svg" viewBox="0 0 128 128">
-          <circle className="account-journey-ring-track" cx="64" cy="64" r={JOURNEY_RADIUS} />
-          <circle
-            className="account-journey-ring-fill"
-            cx="64" cy="64" r={JOURNEY_RADIUS}
-            strokeDasharray={JOURNEY_CIRC}
-            strokeDashoffset={offset}
-          />
-        </svg>
-        <div className="account-journey-ring-center">
-          <div className="account-journey-ring-num">{current}</div>
-          <div className="account-journey-ring-denom">of {progress.total_steps}</div>
-        </div>
-      </div>
-      <div className="account-journey-current-title">{progress.step_title}</div>
-      <p className="account-journey-current-subtitle">{progress.step_subtitle}</p>
-
-      <div className="account-journey-timeline">
-        {steps.map((s, idx) => {
-          const state = journeyStepState(s, current);
-          return (
-            <div key={s.step}>
-              {idx > 0 && <div className={`account-journey-connector account-journey-connector--${s.step <= current ? 'filled' : 'empty'}`} />}
-              <div className={`account-journey-step ${state}`}>
-                <div className="account-journey-step-node">
-                  {state === 'complete' ? '✓' : state === 'active' ? s.icon : s.step}
-                </div>
-                <div className="account-journey-step-body">
-                  <div className="account-journey-step-title">{s.title}</div>
-                  <div className="account-journey-step-subtitle">{s.subtitle}</div>
-                  {state === 'active' && <span className="account-journey-step-pill">In Progress</span>}
-                  {state === 'complete' && <span className="account-journey-step-pill">Complete</span>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function ShareCard({ incidentId }: { incidentId: number }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -182,6 +128,7 @@ function ShareCard({ incidentId }: { incidentId: number }) {
     }
   };
 
+  const message = "I'm sharing a case with you so you can follow along and see how things are going:";
   const copy = () => {
     if (!shareUrl) return;
     navigator.clipboard?.writeText(shareUrl).then(() => {
@@ -189,27 +136,43 @@ function ShareCard({ incidentId }: { incidentId: number }) {
       setTimeout(() => setCopied(false), 2000);
     });
   };
+  const nativeShare = () => {
+    if (shareUrl) navigator.share?.({ text: message, url: shareUrl }).catch(() => {});
+  };
 
   return (
-    <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 10 }}>Share with family and friends</div>
-      <p className="account-detail-desc-text" style={{ marginBottom: 14 }}>
-        Send this link to someone who wants to follow along. They&apos;ll be able to see how things
-        are going — no operational details, just the reassurance that this is being handled.
+    <section className="share-card">
+      <div className="share-icon" aria-hidden="true">💙</div>
+      <h2 className="share-title">Keep the people who care in the loop</h2>
+      <p className="share-text">
+        Send a link to family or friends. They can follow how things are going, step by step.
+        They won&apos;t see private details.
       </p>
       {shareUrl ? (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input className="account-input" readOnly value={shareUrl} style={{ flex: 1, minWidth: 200 }} onFocus={e => e.target.select()} />
-          <button className="account-submit" style={{ width: 'auto', padding: '10px 18px' }} onClick={copy}>
-            {copied ? '✓ Copied' : 'Copy Link'}
-          </button>
-        </div>
+        <>
+          <div className="share-link">
+            <input className="account-input" readOnly value={shareUrl} onFocus={e => e.target.select()} aria-label="Share link" />
+            <button className="share-btn share-btn--solid" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+          </div>
+          <div className="share-actions">
+            <a
+              className="share-btn"
+              href={`https://wa.me/?text=${encodeURIComponent(`${message} ${shareUrl}`)}`}
+              target="_blank" rel="noopener noreferrer"
+            >
+              Send on WhatsApp
+            </a>
+            {typeof navigator !== 'undefined' && 'share' in navigator && (
+              <button className="share-btn" onClick={nativeShare}>More options</button>
+            )}
+          </div>
+        </>
       ) : (
-        <button className="account-submit" style={{ width: 'auto', padding: '10px 18px' }} onClick={getLink} disabled={busy}>
-          {busy ? 'Generating…' : '🔗 Get Share Link'}
+        <button className="share-btn share-btn--solid share-btn--wide" onClick={getLink} disabled={busy}>
+          {busy ? 'Creating link…' : 'Create a share link'}
         </button>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -827,6 +790,14 @@ export default function IncidentDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user, authLoading, location.key]);
 
+  // A family member leaves this page open, so it refreshes itself the way the
+  // public tracker does.
+  useEffect(() => {
+    if (relation !== 'follower') return;
+    const iv = setInterval(() => loadIncident({ silent: true }), 60_000);
+    return () => clearInterval(iv);
+  }, [relation, loadIncident]);
+
   if (state === 'loading') {
     return (
       <div className="account-page">
@@ -855,7 +826,7 @@ export default function IncidentDetailPage() {
 
   const inc = incident!;
 
-  // ── Follower (family/friend): macro-only, warm framing, no task list ──────
+  // ── Follower (family/friend): the calm progress view, no operational data ──
   if (relation === 'follower') {
     return (
       <div className="account-page">
@@ -865,28 +836,34 @@ export default function IncidentDetailPage() {
             <div className="account-nav-brand"><span className="account-nav-brand-dot" />Haverim Mehalzim</div>
           </nav>
 
-          <div className="account-card">
-            <div className="account-incident-top">
-              <div className="account-incident-type">{inc.patient_name || inc.incident_type || 'Case'}</div>
-              <span className={`account-incident-badge ${inc.handled ? 'account-incident-badge--past' : 'account-incident-badge--ongoing'}`}>
-                {inc.handled ? 'Resolved' : 'Ongoing'}
-              </span>
-            </div>
-            <div className="account-incident-meta">
+          <div className="family-header">
+            <div className="family-eyebrow">You&apos;re following</div>
+            <h1 className="family-title">{inc.patient_name || 'this case'}</h1>
+            <div className="family-meta">
               {inc.location}{inc.opened_date ? ` · since ${inc.opened_date}` : ''}
+              <span className={`family-status${inc.handled ? ' family-status--done' : ''}`}>{inc.handled ? 'Resolved' : 'Ongoing'}</span>
             </div>
           </div>
 
-          {inc.progress && (
-            <div className="account-card">
-              <FamilyJourneyCard progress={inc.progress} />
-            </div>
+          {inc.progress ? (
+            <>
+              {inc.progress.step >= inc.progress.total_steps && <CaseCompletion caseId={inc.monday_item_id ?? ''} />}
+              <CaseJourney
+                step={inc.progress.step}
+                total={inc.progress.total_steps}
+                sensitive={inc.progress.is_sensitive}
+                showHero={inc.progress.step < inc.progress.total_steps}
+                note="You don't need to do anything right now. This page updates by itself."
+              />
+            </>
+          ) : (
+            <p className="family-empty">Updates will appear here as soon as the case starts to move.</p>
           )}
 
-          <div className="account-card account-card--center" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            You&apos;re following this case as a family member or friend. The person who opened it
-            can see the full details and next steps.
-          </div>
+          <p className="family-foot">
+            You&apos;re following this case as a family member or friend. The person who opened it can
+            see the full details and next steps.
+          </p>
         </div>
       </div>
     );
