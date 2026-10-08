@@ -98,3 +98,13 @@ EMAIL_REPLY_TO       = os.getenv("EMAIL_REPLY_TO", "") or EMAIL_SENDER_ADDRESS
 WHATSABLE_API_KEY        = os.getenv("WHATSABLE_API_KEY")
 WHATSAPP_BUSINESS_NUMBER = (os.getenv("WHATSAPP_BUSINESS_NUMBER") or "").strip()
 WHATSABLE_SEND_URL   = os.getenv("WHATSABLE_SEND_URL", "https://dashboard.whatsable.app/api/whatsapp/messages/v2.0.0/send")
+
+# The incident-management agent (a separate Railway project, WhatsApp-connected).
+# When both are set, new-incident reports go to the agent first — it posts them
+# to the team's WhatsApp group — and WhatSable above is only the fallback if the
+# agent can't be reached. AGENT_BASE_URL is the agent's public address with no
+# path (https://<agent-domain>); each thing the site asks of the agent adds its
+# own path in code. AGENT_API_SECRET has the same name and value on the agent,
+# and is shared by everything the site calls there.
+AGENT_BASE_URL   = (os.getenv("AGENT_BASE_URL") or "").strip().rstrip("/")
+AGENT_API_SECRET = (os.getenv("AGENT_API_SECRET") or "").strip()

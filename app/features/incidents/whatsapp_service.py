@@ -1,6 +1,14 @@
 """
 WhatsApp incident report — when a caller opens a call on the website, send the
-team a Hebrew summary of the case through WhatSable's send API.
+team a Hebrew summary of the case.
+
+Two routes, one report:
+  - the incident-management agent (agent_service) — preferred when configured.
+    It posts to the team's WhatsApp group as a normal message, so the report
+    gets the full, spacious layout (build_rich_report);
+  - WhatSable's send API — the original route, kept as the fallback if the
+    agent can't be reached. It sends through pre-made templates (see the note
+    on the compact report below), hence its own, tighter layout.
 
 Best-effort by design (same stance as email_service): the call is already
 saved on Monday and in our DB by the time this runs, so a WhatsApp failure is
@@ -26,6 +34,7 @@ from datetime import datetime, timezone
 import requests
 
 from app.config import PUBLIC_BASE_URL, WHATSABLE_API_KEY, WHATSAPP_BUSINESS_NUMBER, WHATSABLE_SEND_URL
+from app.features.incidents import agent_service
 from app.features.incidents.constants import GENDER_TRANSLATIONS, INCIDENT_TYPE_TRANSLATIONS
 
 try:
@@ -56,6 +65,138 @@ def to_e164(number: str) -> str:
 def is_configured() -> bool:
     return bool(WHATSABLE_API_KEY and to_e164(WHATSAPP_BUSINESS_NUMBER))
 
+
+# ── Rich report (for the agent) ─────────────────────────────────────────────
+# A normal WhatsApp message: sections, bold labels, a quoted description. No
+# template, so no line limit — only WhatsApp's 4096-character message cap, which
+# the form's field limits keep the report well under (largest possible: ~3,100).
+
+_RICH_RULE = "━━━━━━━━━━━━━━━"
+_RICH_TRUNCATION_NOTE = "…\n(התיאור המלא באפליקציה)"
+_RICH_MAX_LEN = 4000
+
+
+def _rich_plain(value) -> str:
+    """User-typed text with WhatsApp's formatting characters defused, so a
+    stray "*" or "_text_" in a description can't bold/italicise (or break) the
+    report. Look-alike characters, one for one, so the length is unchanged;
+    underscores inside words (links, handles) are left alone."""
+    text = "" if value is None else str(value).strip()
+    text = text.replace("*", "∗").replace("~", "∼").replace("`", "ˋ")
+    text = re.sub(r"(?<!\w)_(?=\S)|(?<=\S)_(?!\w)", "＿", text)
+    return text
+
+
+def _rich_line(label: str, value, *, ltr: bool = False) -> str | None:
+    value = _rich_plain(value)
+    if not value:
+        return None
+    if ltr:
+        value = f"\u200e{value}\u200e"  # keeps "+972 50..." left-to-right inside a Hebrew line
+    return f"*{label}:* {value}"
+
+
+def _rich_quote(text: str) -> str:
+    """WhatsApp quote block: every line prefixed with "> "."""
+    return "\n".join(f"> {ln}" if ln.strip() else ">" for ln in text.splitlines())
+
+
+def _rich_section(emoji: str, title: str, lines: list) -> list:
+    lines = [ln for ln in lines if ln]
+    return [f"{emoji} *{title}*", *lines, ""] if lines else []
+
+
+def _rich_compose(*, description: str, f: dict) -> str:
+    opened_at = f["opened_at"]
+    description = _rich_plain(description)
+
+    parts = [
+        "🚨 *דוח אירוע חדש | חברים מחלצים*",
+        f"🗓️ {opened_at.strftime('%d/%m/%Y')} · {opened_at.strftime('%H:%M')}",
+        _RICH_RULE,
+        "",
+    ]
+    classification = [_rich_line("סוג", _HEBREW_TYPE.get(f["incident_type"], f["incident_type"]))]
+    if description:
+        classification += ["*תיאור:*", _rich_quote(description)]
+    parts += _rich_section("📋", "סיווג האירוע", classification)
+    parts += _rich_section("📍", "מיקום", [
+        _rich_line("מדינה", f["country_name"]),
+        _rich_line("עיר", f["city"]),
+    ])
+    parts += _rich_section("👤", "פרטי המדווח", [
+        _rich_line("שם מלא", f["filer_name"]),
+        _rich_line("טלפון", f["filer_phone"], ltr=True),
+    ])
+    parts += _rich_section("🩺", "פרטי הנפגע", [
+        _rich_line("שם מלא", f["patient_name"]),
+        _rich_line("טלפון", f["patient_phone"], ltr=True),
+        _rich_line("מגדר", _HEBREW_GENDER.get(f["patient_gender"], f["patient_gender"])),
+        _rich_line("גיל", f["patient_age"]),
+    ])
+
+    parts.append(_RICH_RULE)
+    if f["incident_url"]:
+        parts += ["🔗 *לפתיחת האירוע באפליקציה*", f["incident_url"], ""]
+    if f["monday_item_id"]:
+        parts.append(f"🆔 מזהה אירוע: {f['monday_item_id']}")
+    return "\n".join(parts).strip()
+
+
+def _rich_fields(report: dict) -> dict:
+    """The fields the rich layout is built from, with the incident link and the
+    opening time resolved once."""
+    incident_id = report.get("incident_id")
+    return dict(
+        incident_type=report["incident_type"], city=report["city"], country_name=report["country_name"],
+        filer_name=report["filer_name"], filer_phone=report.get("filer_phone", ""),
+        patient_name=report["patient_name"], patient_age=report.get("patient_age"),
+        patient_gender=report.get("patient_gender", ""), patient_phone=report.get("patient_phone", ""),
+        monday_item_id=report.get("monday_item_id", ""),
+        incident_url=f"{PUBLIC_BASE_URL}/incidents/{incident_id}" if PUBLIC_BASE_URL and incident_id else "",
+        opened_at=(report.get("opened_at") or datetime.now(timezone.utc)).astimezone(_REPORT_TZ),
+    )
+
+
+def build_rich_report(*, description: str, **report) -> str:
+    """The spacious report text for a normal WhatsApp message. If it would ever
+    exceed WhatsApp's cap, only the description (the one long free-text field)
+    is shortened — never the link or the event id at the bottom."""
+    fields = _rich_fields(report)
+    text = _rich_compose(description=description, f=fields)
+    overflow = len(text) - _RICH_MAX_LEN
+    if overflow > 0:
+        keep = max(0, len(description.strip()) - overflow - len(_RICH_TRUNCATION_NOTE) - 8)
+        text = _rich_compose(description=description.strip()[:keep].rstrip() + _RICH_TRUNCATION_NOTE, f=fields)
+    return text[:_RICH_MAX_LEN]
+
+
+def build_agent_payload(*, description: str, **report) -> dict:
+    """What the agent receives: the ready-made message text (it forwards it as
+    is) plus the structured fields, for anything it wants to do with them."""
+    fields = _rich_fields(report)
+    return {
+        "event": "incident.opened",
+        "incident_id": report.get("incident_id"),
+        "monday_item_id": fields["monday_item_id"],
+        "opened_at": fields["opened_at"].isoformat(),
+        "incident_type": fields["incident_type"],
+        "country": fields["country_name"],
+        "city": fields["city"],
+        "description": description,
+        "reporter": {"name": fields["filer_name"], "phone": fields["filer_phone"]},
+        "patient": {
+            "name": fields["patient_name"], "age": fields["patient_age"],
+            "gender": fields["patient_gender"], "phone": fields["patient_phone"],
+        },
+        "incident_url": fields["incident_url"],
+        "report_text": build_rich_report(description=description, **report),
+    }
+
+
+# ── Compact report (for WhatSable) ──────────────────────────────────────────
+# WhatSable does not send free-form text (see the module docstring), so this
+# layout is the five-line one described there.
 
 _LRM = "\u200e"  # keeps "+972 50..." reading left-to-right inside a Hebrew line
 _SEP = "  |  "
@@ -195,15 +336,32 @@ def send_message(text: str) -> bool:
     return False
 
 
+def _deliver(agent_payload: dict | None, compact_text: str | None) -> None:
+    """The agent first; WhatSable only if the agent did not take the report (or
+    isn't configured). Runs on the background thread."""
+    if agent_payload is not None:
+        if agent_service.send_report(agent_payload):
+            return
+        print("[whatsapp] agent did not take the report" + (" — falling back to WhatSable" if compact_text else " and no fallback is configured"))
+    if compact_text is not None:
+        send_message(compact_text)
+
+
 def send_incident_report_in_background(**report_fields) -> None:
-    """Build the report now (cheap, no I/O) and send it on a daemon thread so
-    the caller's request returns immediately."""
-    if not is_configured():
-        print("[whatsapp] not configured (WHATSABLE_API_KEY / WHATSAPP_BUSINESS_NUMBER) — report skipped")
+    """Build the report now (cheap, no I/O) and deliver it on a daemon thread so
+    the caller's request returns immediately. Goes to the agent when one is
+    configured, with WhatSable as the fallback; otherwise to WhatSable alone."""
+    use_agent = agent_service.is_configured()
+    use_whatsable = is_configured()
+    if not use_agent and not use_whatsable:
+        print("[whatsapp] neither the agent nor WhatSable is configured — report skipped")
         return
+    # Both layouts show the same opening time
+    report_fields.setdefault("opened_at", datetime.now(timezone.utc))
     try:
-        text = build_incident_report(**report_fields)
+        agent_payload = build_agent_payload(**report_fields) if use_agent else None
+        compact_text = build_incident_report(**report_fields) if use_whatsable else None
     except Exception as e:
         print(f"[whatsapp] could not build report: {e}")
         return
-    threading.Thread(target=send_message, args=(text,), daemon=True).start()
+    threading.Thread(target=_deliver, args=(agent_payload, compact_text), daemon=True).start()
