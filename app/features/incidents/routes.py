@@ -1060,6 +1060,7 @@ def open_incident():
         patient_gender=patient_gender,
         patient_phone=patient_phone,
         monday_item_id=monday_item_id,
+        incident_id=incident.id,
     )
 
     return jsonify({'success': True, 'incident': {'id': incident.id, 'monday_item_id': monday_item_id}}), 200
