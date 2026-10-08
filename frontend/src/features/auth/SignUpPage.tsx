@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import PasswordInput from '../../components/PasswordInput';
 import './auth.css';
@@ -12,11 +12,30 @@ export default function SignUpPage() {
   // a brand-new family/friend account lands back on the shared case, not the
   // generic account page, once they've confirmed their email.
   const next = searchParams.get('next');
+  // e.g. /signup?invite=<token> — an admin-sent caller invitation. The invited
+  // email is fetched (never passed in the URL) and locked, so the account is
+  // created for exactly the address the invitation was sent to.
+  const inviteToken = searchParams.get('invite');
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    fetch(`/api/caller-invite/${encodeURIComponent(inviteToken)}`)
+      .then(r => r.json())
+      .then(j => {
+        if (j.success && j.state === 'pending' && j.email) {
+          setInvitedEmail(j.email);
+          setEmail(j.email);
+          if (j.name) setFullName(n => n || j.name);
+        }
+      })
+      .catch(() => { /* fall back to the ordinary sign-up form */ });
+  }, [inviteToken]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -63,11 +82,12 @@ export default function SignUpPage() {
           </div>
         ) : (
           <div className="auth-card">
-            <div className="auth-eyebrow">Create Your Account</div>
-            <h1 className="auth-title">Sign up</h1>
+            <div className="auth-eyebrow">{invitedEmail ? 'Your case is waiting' : 'Create Your Account'}</div>
+            <h1 className="auth-title">{invitedEmail ? 'Create your account' : 'Sign up'}</h1>
             <p className="auth-sub">
-              Already donated or bought premium? Use that same email to claim your existing
-              account and set a password for it.
+              {invitedEmail
+                ? 'Choose a password and we will send you one link to confirm your email. Then your case page opens.'
+                : 'Already donated or bought premium? Use that same email to claim your existing account and set a password for it.'}
             </p>
             <form className="auth-form" onSubmit={handleSubmit}>
               <label className="auth-label">
@@ -91,6 +111,7 @@ export default function SignUpPage() {
                   required
                   maxLength={200}
                   autoComplete="email"
+                  readOnly={!!invitedEmail}
                 />
               </label>
               <label className="auth-label">
@@ -111,7 +132,7 @@ export default function SignUpPage() {
             </form>
             <div className="auth-switch">
               Already have an account?{' '}
-              <Link to={next ? `/login?next=${encodeURIComponent(next)}` : '/login'}>Log in</Link>
+              <Link to={next ? `/login?${inviteToken ? `invite=${encodeURIComponent(inviteToken)}&` : ''}next=${encodeURIComponent(next)}` : '/login'}>Log in</Link>
             </div>
           </div>
         )}

@@ -10,10 +10,10 @@ have no home on Monday at all.
 """
 
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
-from app.models import Incident, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer, Payment, PaymentStatus
+from app.models import Incident, IncidentCallerInvite, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer, Payment, PaymentStatus
 from app.services.account_service import grant_role
 
 
@@ -327,3 +327,113 @@ def user_funded_incident(user_id: int, monday_item_id: str) -> bool:
         )
         .first()
     ) is not None
+
+
+# ── Inviting the caller of a Monday-entered incident ───────────────────────
+# Most incidents are typed straight into Monday by staff, so no app account
+# owns them. An admin who knows the caller's email creates an invite; the
+# caller opens the link, signs up with that exact email, and becomes the
+# incident's owner (the same owner the app gives people who open a call
+# themselves). The link is only a pointer — the claim itself is gated on a
+# verified login for the invited email (see claim_caller_invite).
+
+_CALLER_INVITE_TTL = timedelta(days=14)
+
+
+class CallerInviteError(Exception):
+    """Expected, user-facing failure. `status_code` maps to the HTTP response."""
+
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
+def _aware(dt):
+    return dt.replace(tzinfo=timezone.utc) if dt is not None and dt.tzinfo is None else dt
+
+
+def caller_invite_state(invite: IncidentCallerInvite) -> str:
+    """'claimed' | 'revoked' | 'expired' | 'pending'."""
+    if invite.claimed_at is not None:
+        return 'claimed'
+    if invite.revoked_at is not None:
+        return 'revoked'
+    if _aware(invite.expires_at) < datetime.now(timezone.utc):
+        return 'expired'
+    return 'pending'
+
+
+def get_latest_caller_invite(incident_id: int) -> IncidentCallerInvite | None:
+    return (
+        IncidentCallerInvite.query
+        .filter_by(incident_id=incident_id)
+        .order_by(IncidentCallerInvite.created_at.desc(), IncidentCallerInvite.id.desc())
+        .first()
+    )
+
+
+def get_caller_invite_by_token(token: str) -> IncidentCallerInvite | None:
+    if not token:
+        return None
+    return IncidentCallerInvite.query.filter_by(token=token).one_or_none()
+
+
+def create_caller_invite(*, incident: Incident, email: str, name: str | None, created_by) -> IncidentCallerInvite:
+    """Invite `email` to become the caller of `incident`. Any earlier unclaimed
+    invite for this incident is revoked, so only the newest link works.
+    `email` must already be validated/lowercased. Does not commit."""
+    if incident.user_id is not None:
+        raise CallerInviteError("This incident already has an account holder.", 409)
+
+    now = datetime.now(timezone.utc)
+    for old in IncidentCallerInvite.query.filter_by(incident_id=incident.id, claimed_at=None, revoked_at=None).all():
+        old.revoked_at = now
+
+    invite = IncidentCallerInvite(
+        incident_id=incident.id,
+        email=email,
+        name=(name or '').strip()[:120] or None,
+        token=secrets.token_urlsafe(32),
+        created_by_user_id=created_by.id if created_by is not None else None,
+        expires_at=now + _CALLER_INVITE_TTL,
+    )
+    db.session.add(invite)
+    return invite
+
+
+def revoke_caller_invite(invite: IncidentCallerInvite) -> None:
+    if invite.claimed_at is None and invite.revoked_at is None:
+        invite.revoked_at = datetime.now(timezone.utc)
+
+
+def claim_caller_invite(*, invite: IncidentCallerInvite, user) -> Incident:
+    """Make `user` the owner of the invited incident. Requires a logged-in
+    (hence email-verified) user whose email is the invited one — the link
+    alone proves nothing. Idempotent for the user who already claimed it.
+    Does not commit."""
+    incident = invite.incident
+    if invite.claimed_at is not None:
+        if invite.claimed_by_user_id == user.id:
+            return incident
+        raise CallerInviteError("This invitation has already been used.", 409)
+
+    state = caller_invite_state(invite)
+    if state == 'revoked':
+        raise CallerInviteError("This invitation is no longer valid. Please ask Haverim Mehalzim for a new one.", 410)
+    if state == 'expired':
+        raise CallerInviteError("This invitation has expired. Please ask Haverim Mehalzim for a new one.", 410)
+
+    if (user.email or '').strip().lower() != invite.email:
+        raise CallerInviteError("This invitation was sent to a different email address.", 403)
+
+    if incident.user_id is not None and incident.user_id != user.id:
+        raise CallerInviteError("This incident already has an account holder.", 409)
+
+    incident.user_id = user.id
+    invite.claimed_at = datetime.now(timezone.utc)
+    invite.claimed_by_user_id = user.id
+    grant_role(user, "client")
+    # Someone who was only following the case is now its owner.
+    IncidentFollower.query.filter_by(incident_id=incident.id, user_id=user.id).delete()
+    return incident

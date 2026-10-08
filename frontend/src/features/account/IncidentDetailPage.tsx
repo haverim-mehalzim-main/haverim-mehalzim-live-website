@@ -327,6 +327,112 @@ function VolunteerJoinCard({ incidentId, alreadyRequested, onRequested }: {
   );
 }
 
+// ── Admin-only: invite the caller of a Monday-entered incident ──────────────
+interface CallerInvite {
+  email: string;
+  name: string | null;
+  state: 'pending' | 'claimed' | 'expired' | 'revoked';
+  expires_at: string;
+  last_sent_at: string | null;
+  claimed_at: string | null;
+  invite_url: string | null;
+}
+
+function CallerInviteCard({ incidentId }: { incidentId: number }) {
+  const [invite, setInvite] = useState<CallerInvite | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    fetch(`/api/staff/incidents/${incidentId}/caller-invite`)
+      .then(r => r.json())
+      .then(j => { if (j.success) setInvite(j.invite); })
+      .finally(() => setLoaded(true));
+  }, [incidentId]);
+
+  const copy = async (url: string) => {
+    try { await navigator.clipboard.writeText(url); return true; } catch { return false; }
+  };
+
+  const create = async (toEmail: string, toName: string, send: boolean) => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const res = await fetch(`/api/staff/incidents/${incidentId}/caller-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: toEmail, name: toName, send }),
+      });
+      const json = await res.json();
+      if (!json.success) { setError(json.message || 'Could not create the invitation.'); return; }
+      setInvite(json.invite);
+      if (send && json.email_sent) setNotice(`Invitation emailed to ${json.invite.email}.`);
+      else if (send) setError('The email could not be sent. Copy the link and send it yourself.');
+      else if (json.invite.invite_url && await copy(json.invite.invite_url)) setNotice('Link copied. Send it to the caller.');
+    } catch {
+      setError('Could not create the invitation.');
+    } finally { setBusy(false); }
+  };
+
+  const cancel = async () => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const res = await fetch(`/api/staff/incidents/${incidentId}/caller-invite`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) setInvite(json.invite);
+    } finally { setBusy(false); }
+  };
+
+  if (!loaded) return null;
+
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+  return (
+    <section className="staff-card staff-card-pad">
+      <h2 className="staff-section-title">Caller access</h2>
+
+      {invite?.state === 'claimed' ? (
+        <p className="staff-row-meta">The caller created their account ({invite.email}) and now follows this case.</p>
+      ) : invite?.state === 'pending' ? (
+        <>
+          <StaffKv label="Invited" value={invite.name ? `${invite.name} · ${invite.email}` : invite.email} />
+          <StaffKv label="Status" value={`Waiting for sign-up, valid until ${fmt(invite.expires_at)}`} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <button className="staff-btn" disabled={busy} onClick={() => create(invite.email, invite.name || '', true)}>Resend email</button>
+            <button className="staff-btn" disabled={busy} onClick={async () => setNotice((await copy(invite.invite_url || '')) ? 'Link copied.' : 'Could not copy the link.')}>Copy link</button>
+            <button className="staff-btn staff-btn--danger" disabled={busy} onClick={cancel}>Cancel</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="staff-row-meta" style={{ marginBottom: 10 }}>
+            {invite?.state === 'expired' || invite?.state === 'revoked'
+              ? 'The last invitation is no longer valid. Send a new one.'
+              : 'No account follows this case yet. Invite the caller to create one with their email.'}
+          </p>
+          <form
+            onSubmit={e => { e.preventDefault(); create(email, name, true); }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+          >
+            <input className="staff-field" type="email" required placeholder="Caller's email" value={email} onChange={e => setEmail(e.target.value)} maxLength={200} />
+            <input className="staff-field" placeholder="Caller's name (optional)" value={name} onChange={e => setName(e.target.value)} maxLength={120} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="staff-btn staff-btn--primary" type="submit" disabled={busy || !email.trim()}>{busy ? 'Sending…' : 'Send invitation'}</button>
+              <button className="staff-btn" type="button" disabled={busy || !email.trim()} onClick={() => create(email, name, false)}>Copy link instead</button>
+            </div>
+          </form>
+        </>
+      )}
+
+      {notice && <p className="staff-row-meta" style={{ marginTop: 10 }}>{notice}</p>}
+      {error && <div className="staff-error" style={{ marginTop: 10, marginBottom: 0 }}>{error}</div>}
+    </section>
+  );
+}
+
 // ── Admin-only: approve or deny volunteers asking to join this incident ─────
 function VolunteerRequestsCard({ incidentId, requests, onChanged }: {
   incidentId: number; requests: VolunteerRequest[]; onChanged: (requests: VolunteerRequest[]) => void;
@@ -947,6 +1053,8 @@ export default function IncidentDetailPage() {
               <StaffKv label="Patient phone" value={inc.patient_phone} />
               {!inc.owner && !inc.filer_info && !inc.patient_phone && <p className="staff-row-meta">No contact details recorded.</p>}
             </section>
+
+            {relation === 'admin' && !inc.owner && <CallerInviteCard incidentId={inc.id} />}
 
             {relation === 'admin' && (
               <VolunteerRequestsCard incidentId={inc.id} requests={volunteerRequests} onChanged={setVolunteerRequests} />

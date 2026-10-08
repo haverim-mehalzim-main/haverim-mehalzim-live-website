@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import PasswordInput from '../../components/PasswordInput';
@@ -12,10 +12,20 @@ export default function LoginPage() {
   // e.g. /login?next=/join/<token> — lets a share/invite link bounce someone
   // through login and land back where they were headed, instead of /account.
   const next = searchParams.get('next');
+  // /login?invite=<token> — pre-fills the email an admin invited, nothing else.
+  const inviteToken = searchParams.get('invite');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    fetch(`/api/caller-invite/${encodeURIComponent(inviteToken)}`)
+      .then(r => r.json())
+      .then(j => { if (j.success && j.state === 'pending' && j.email) setEmail(e => e || j.email); })
+      .catch(() => { /* ordinary login form */ });
+  }, [inviteToken]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -87,7 +97,7 @@ export default function LoginPage() {
           </form>
           <div className="auth-switch">
             Don&apos;t have an account?{' '}
-            <Link to={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'}>Sign up</Link>
+            <Link to={next ? `/signup?${inviteToken ? `invite=${encodeURIComponent(inviteToken)}&` : ''}next=${encodeURIComponent(next)}` : '/signup'}>Sign up</Link>
           </div>
         </div>
       </div>

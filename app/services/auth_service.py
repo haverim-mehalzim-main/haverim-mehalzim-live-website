@@ -43,6 +43,9 @@ def _validate_email(email: str) -> str:
     return email
 
 
+validate_email = _validate_email
+
+
 def _validate_password(password: str) -> str:
     # Length over complexity rules, per current password-hashing best practice
     # (NIST 800-63B) — arbitrary character-class requirements push people

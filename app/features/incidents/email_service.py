@@ -406,3 +406,109 @@ def _build_text(first_name: str, amount_str: str, impact_url: str, track_url: st
 
     divider = ["", "──────────  ENGLISH  ──────────", ""]
     return "\n".join(he + divider + en)
+
+
+def send_caller_invite(to_email: str, to_name: str, invite_url: str, days_valid: int = 14) -> bool:
+    """The admin-initiated invitation for the caller of an incident that was
+    entered on Monday: a link to create an account (with this very email) and
+    follow their case. Same best-effort contract as the other sends: never
+    raises, returns True/False."""
+    if not is_configured():
+        print("[email_service] BREVO_API_KEY / sender / PUBLIC_BASE_URL not set — skipping caller invite")
+        return False
+    if not to_email:
+        print("[email_service] no recipient email — skipping caller invite")
+        return False
+
+    first_name = _first_name(to_name)
+    he_greeting = f"שלום {html.escape(first_name)}," if first_name else "שלום,"
+    en_greeting = f"Hi {html.escape(first_name)}," if first_name else "Hi there,"
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="he">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;
+                    font-family:'Segoe UI',Arial,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.06);">
+        <tr>
+          <td style="background:#0f172a;padding:26px 32px;text-align:center;">
+            <div style="color:#5eead4;font-size:13px;letter-spacing:2px;font-weight:700;">חברים מחלצים</div>
+            <div style="color:#e5e7eb;font-size:12px;margin-top:4px;">HAVERIM MEHALZIM</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;direction:rtl;text-align:right;">
+            <h1 style="margin:0 0 12px;font-size:20px;color:#0f172a;">עמוד אישי למעקב אחר הפנייה שלכם</h1>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">{he_greeting}</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">
+              בעקבות פנייתכם אלינו, הכנו עבורכם עמוד אישי שבו תוכלו לעקוב אחר התקדמות הטיפול.
+              כדי להתחיל, פתחו חשבון עם כתובת האימייל הזו, שאליה נשלחה ההודעה.
+              הקישור בתוקף ל-{days_valid} ימים.
+            </p>
+            <div style="text-align:center;">{_button(invite_url, "פתיחת חשבון ←", True)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px 32px;direction:ltr;text-align:left;border-top:1px dashed #cbd5e1;">
+            <h1 style="margin:24px 0 12px;font-size:20px;color:#0f172a;">Your personal page to follow your case</h1>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">{en_greeting}</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">
+              Following your call to us, we've set up a personal page where you can follow how your
+              case is progressing. To get started, create an account with this email address, the
+              one this message was sent to. The link is valid for {days_valid} days.
+            </p>
+            <div style="text-align:center;">{_button(invite_url, "Create my account →", True)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:18px 32px;text-align:center;border-top:1px solid #eceff3;">
+            <div style="font-size:12px;color:#9ca3af;line-height:1.6;">
+              חברים מחלצים · Haverim Mehalzim<br>
+              אם לא פניתם אלינו, ניתן להתעלם מהודעה זו · If you didn't contact us, you can ignore this email.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    text_body = "\n".join([
+        he_greeting, "",
+        f"בעקבות פנייתכם אלינו, הכנו עבורכם עמוד אישי למעקב אחר התקדמות הטיפול. פתחו חשבון עם כתובת האימייל הזו (בתוקף ל-{days_valid} ימים):",
+        invite_url,
+        "", "──────────  ENGLISH  ──────────", "",
+        en_greeting, "",
+        f"Following your call to us, we've set up a personal page where you can follow how your case is progressing. Create an account with this email address (valid for {days_valid} days):",
+        invite_url,
+    ])
+
+    payload = {
+        "sender":      {"name": EMAIL_SENDER_NAME, "email": EMAIL_SENDER_ADDRESS},
+        "to":          [{"email": to_email, "name": (to_name or "").strip() or to_email}],
+        "replyTo":     {"email": EMAIL_REPLY_TO, "name": EMAIL_SENDER_NAME},
+        "subject":     "עמוד אישי למעקב אחר הפנייה שלכם | Follow your case",
+        "htmlContent": html_body,
+        "textContent": text_body,
+        "tags":        ["caller-invite"],
+    }
+    headers = {
+        "api-key":      BREVO_API_KEY,
+        "content-type": "application/json",
+        "accept":       "application/json",
+    }
+
+    try:
+        resp = requests.post(_BREVO_URL, json=payload, headers=headers, timeout=15)
+        if resp.status_code // 100 == 2:
+            print(f"[email_service] caller invite sent to {to_email}")
+            return True
+        print(f"[email_service] Brevo error {resp.status_code}: {resp.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"[email_service] send failed: {e}")
+        return False

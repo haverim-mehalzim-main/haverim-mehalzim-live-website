@@ -175,3 +175,32 @@ class IncidentRejection(db.Model):
 
     def __repr__(self):
         return f"<IncidentRejection monday_item_id={self.monday_item_id!r}>"
+
+
+class IncidentCallerInvite(db.Model):
+    """An admin's invitation for the caller of an incident that was entered on
+    Monday.com directly (so no app account owns it). The link carries the
+    secret `token`; claiming it needs a verified login whose email equals
+    `email` — the link alone is never enough, so a forwarded link can't hand
+    the case to the wrong person. At most one invite per incident is live: a
+    new one revokes the earlier unclaimed ones."""
+
+    __tablename__ = "incident_caller_invites"
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    incident_id = db.Column(db.BigInteger, db.ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
+    email = db.Column(db.Text, nullable=False)
+    name = db.Column(db.Text, nullable=True)
+    token = db.Column(db.Text, nullable=False, unique=True)
+    created_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    last_sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    claimed_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    incident = db.relationship("Incident")
+
+    def __repr__(self):
+        return f"<IncidentCallerInvite incident_id={self.incident_id} claimed={self.claimed_at is not None}>"

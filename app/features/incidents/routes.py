@@ -62,7 +62,7 @@ from app.features.incidents.constants import (
 # that COUNTRY_NAME_BY_CODE itself doesn't already provide.
 _COUNTRY_CODE_BY_NAME = {v: k for k, v in COUNTRY_NAME_BY_CODE.items()}
 from app.extensions import db
-from app.services.auth_service import current_user
+from app.services.auth_service import AuthError, current_user, validate_email
 from app.services.account_service import user_has_role
 from app.services import incident_service
 from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
@@ -1215,6 +1215,131 @@ def share_incident(local_id):
 
     from app.config import PUBLIC_BASE_URL
     return jsonify({'success': True, 'share_token': token, 'share_url': f'{PUBLIC_BASE_URL}/join/{token}'}), 200
+
+
+# ── Inviting the caller of a Monday-entered incident ───────────────────────
+# An admin who knows the caller's email creates an invite; the caller follows
+# the link, signs up with that email, and becomes the incident's owner. See
+# incident_service.claim_caller_invite for why the link alone isn't enough.
+
+def _caller_invite_url(token: str) -> str:
+    from flask import request
+    from app.config import PUBLIC_BASE_URL
+    return f"{PUBLIC_BASE_URL or request.host_url.rstrip('/')}/claim/{token}"
+
+
+def _serialize_caller_invite(invite) -> dict:
+    state = incident_service.caller_invite_state(invite)
+    return {
+        'email': invite.email,
+        'name': invite.name,
+        'state': state,
+        'created_at': invite.created_at.isoformat() if invite.created_at else None,
+        'expires_at': invite.expires_at.isoformat(),
+        'last_sent_at': invite.last_sent_at.isoformat() if invite.last_sent_at else None,
+        'claimed_at': invite.claimed_at.isoformat() if invite.claimed_at else None,
+        # The link is only handed out while it can still be used.
+        'invite_url': _caller_invite_url(invite.token) if state == 'pending' else None,
+    }
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/caller-invite', methods=['GET'])
+def get_caller_invite(local_id):
+    """Admin-only: the latest caller invite for this incident (or null)."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    invite = incident_service.get_latest_caller_invite(local_id)
+    return jsonify({'success': True, 'invite': _serialize_caller_invite(invite) if invite else None}), 200
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/caller-invite', methods=['POST'])
+def create_caller_invite(local_id):
+    """Admin-only: invite the caller of a Monday-entered incident. Sends the
+    invitation email unless `send` is false (the admin copies the link and
+    sends it another way). Creating a new invite revokes the previous one,
+    so "resend" is just calling this again."""
+    from flask import request
+    admin = _staff_role_check(admin_only=True)
+    if admin is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    incident = db.session.get(Incident, local_id)
+    if incident is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+
+    body = request.get_json(silent=True) or {}
+    try:
+        email = validate_email(str(body.get('email', '')))
+    except AuthError as e:
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+
+    try:
+        invite = incident_service.create_caller_invite(
+            incident=incident, email=email, name=str(body.get('name', '') or ''), created_by=admin,
+        )
+    except incident_service.CallerInviteError as e:
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+    db.session.commit()
+
+    email_sent = False
+    if body.get('send', True):
+        email_sent = email_service.send_caller_invite(invite.email, invite.name or '', _caller_invite_url(invite.token))
+        if email_sent:
+            from datetime import timezone
+            invite.last_sent_at = datetime.now(timezone.utc)
+            db.session.commit()
+
+    return jsonify({'success': True, 'email_sent': email_sent, 'invite': _serialize_caller_invite(invite)}), 200
+
+
+@incidents_bp.route('/api/staff/incidents/<int:local_id>/caller-invite', methods=['DELETE'])
+def revoke_caller_invite(local_id):
+    """Admin-only: cancel the pending caller invite so its link stops working."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    invite = incident_service.get_latest_caller_invite(local_id)
+    if invite is None:
+        return jsonify({'success': False, 'message': 'No invitation to cancel.'}), 404
+    incident_service.revoke_caller_invite(invite)
+    db.session.commit()
+    return jsonify({'success': True, 'invite': _serialize_caller_invite(invite)}), 200
+
+
+@incidents_bp.route('/api/caller-invite/<token>', methods=['GET'])
+def lookup_caller_invite(token):
+    """Public: what the invitation page needs before anyone is logged in —
+    whether the link is usable and which email it was made for (so the
+    sign-up form can be pre-filled). Nothing about the case itself."""
+    invite = incident_service.get_caller_invite_by_token(token)
+    if invite is None:
+        return jsonify({'success': False, 'message': 'This link is invalid.'}), 404
+    state = incident_service.caller_invite_state(invite)
+    return jsonify({
+        'success': True,
+        'state': state,
+        'email': invite.email if state == 'pending' else None,
+        'name': invite.name if state == 'pending' else None,
+    }), 200
+
+
+@incidents_bp.route('/api/caller-invite/<token>/claim', methods=['POST'])
+def claim_caller_invite(token):
+    """A logged-in person claims their invitation, becoming the incident's
+    owner. Refused unless their verified email is the invited one."""
+    user = current_user()
+    if user is None:
+        return jsonify({'success': False, 'message': 'Please log in first.'}), 401
+
+    invite = incident_service.get_caller_invite_by_token(token)
+    if invite is None:
+        return jsonify({'success': False, 'message': 'This link is invalid.'}), 404
+
+    try:
+        incident = incident_service.claim_caller_invite(invite=invite, user=user)
+    except incident_service.CallerInviteError as e:
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+    db.session.commit()
+    return jsonify({'success': True, 'incident_id': incident.id}), 200
 
 
 @incidents_bp.route('/api/incidents/join/<token>', methods=['POST'])

@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import DashboardPage from './features/dashboard/DashboardPage';
 import FundOurTeamPage from './features/fund/FundOurTeamPage';
 import TrackAccessPage from './features/tracker/TrackAccessPage';
+import ClaimInvitePage from './features/account/ClaimInvitePage';
 import AdminFeedbackPage from './features/admin/AdminFeedbackPage';
 import StaffVolunteerDashboardPage from './features/staff/StaffVolunteerDashboardPage';
 import StaffAdminDashboardPage from './features/staff/StaffAdminDashboardPage';
@@ -57,6 +58,7 @@ export default function App() {
         } />
         <Route path="/fund-our-team" element={<FundOurTeamPage />} />
         <Route path="/track/:caseId"   element={<TrackAccessPage />} />
+        <Route path="/claim/:token"    element={<ClaimInvitePage />} />
         <Route path="/admin/feedback"  element={<AdminFeedbackPage />} />
         <Route path="/staff/volunteer-dashboard" element={<StaffVolunteerDashboardPage />} />
         <Route path="/staff/admin-dashboard"     element={<StaffAdminDashboardPage />} />
