@@ -9,6 +9,14 @@ send runs on a background thread for the same reason.
 
 Config (app.config): WHATSABLE_API_KEY, WHATSAPP_BUSINESS_NUMBER (the recipient).
 When either is unset the report is skipped.
+
+Shape of the report — WhatSable does not send free-form text. It slots the text
+into one of its pre-approved WhatsApp templates (standard_N_line_textonly),
+chosen by how many lines the text has, and WhatsApp forbids line breaks inside
+a template variable. So the report is at most MAX_LINES lines, each a single
+line (no newlines inside), and the whole text has to fit a template body
+(1024 characters), which is why the description is shortened when long — the
+full text is one tap away on the incident page.
 """
 
 import re
@@ -28,10 +36,6 @@ except Exception:  # tzdata missing on the host — fall back to UTC rather than
 
 _HEBREW_TYPE = {english: hebrew for hebrew, english in INCIDENT_TYPE_TRANSLATIONS.items()}
 _HEBREW_GENDER = {english: hebrew for hebrew, english in GENDER_TRANSLATIONS.items()}
-
-# WhatsApp caps a text message at 4096 characters; stay under it.
-_MAX_MESSAGE_LEN = 4000
-
 
 def to_e164(number: str) -> str:
     """WhatSable wants E.164 (+972501234567). Accepts what people actually
@@ -54,23 +58,35 @@ def is_configured() -> bool:
 
 
 _LRM = "\u200e"  # keeps "+972 50..." reading left-to-right inside a Hebrew line
-_RULE = "━━━━━━━━━━━━━━━"
-_TRUNCATION_NOTE = "…\n(התיאור המלא באפליקציה)"
+_SEP = "  |  "
+MAX_LINES = 5
+# A template body is limited to 1024 characters; stay a little under it.
+_MAX_MESSAGE_LEN = 1000
+_ELLIPSIS = "…"
+
+# Short fields are capped in the message (the form allows 200); the full
+# values are on the incident page.
+_SHORT_FIELD_MAX = 60
 
 
-def _plain(value) -> str:
-    """User-typed text with WhatsApp's formatting characters defused, so a
-    stray "*" or "_text_" in a description can't bold/italicise (or break)
-    the report. Look-alike characters, one for one, so the length is
-    unchanged; underscores inside words (links, handles) are left alone."""
-    text = "" if value is None else str(value).strip()
+def _plain(value, *, limit: int | None = None) -> str:
+    """User-typed text made safe for one template line: formatting characters
+    defused (a stray "*" or "_text_" can't bold/italicise the report —
+    look-alike characters, one for one), line breaks and runs of whitespace
+    collapsed into single spaces (a template variable can't hold a newline or
+    more than four spaces in a row). Underscores inside words (links,
+    handles) are left alone."""
+    text = "" if value is None else str(value)
     text = text.replace("*", "∗").replace("~", "∼").replace("`", "ˋ")
     text = re.sub(r"(?<!\w)_(?=\S)|(?<=\S)_(?!\w)", "＿", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if limit is not None and len(text) > limit:
+        text = text[: limit - 1].rstrip() + _ELLIPSIS
     return text
 
 
-def _line(label: str, value, *, ltr: bool = False) -> str | None:
-    value = _plain(value)
+def _field(label: str, value, *, ltr: bool = False, limit: int | None = _SHORT_FIELD_MAX) -> str | None:
+    value = _plain(value, limit=limit)
     if not value:
         return None
     if ltr:
@@ -78,51 +94,41 @@ def _line(label: str, value, *, ltr: bool = False) -> str | None:
     return f"*{label}:* {value}"
 
 
-def _quote(text: str) -> str:
-    """WhatsApp quote block: every line prefixed with "> "."""
-    return "\n".join(f"> {ln}" if ln.strip() else ">" for ln in text.splitlines())
+def _join(parts: list) -> str:
+    return _SEP.join(p for p in parts if p)
 
 
-def _section(emoji: str, title: str, lines: list) -> list:
-    lines = [ln for ln in lines if ln]
-    return [f"{emoji} *{title}*", *lines, ""] if lines else []
-
-
-def _compose(*, description: str, **f) -> str:
+def _compose(*, description: str, f: dict) -> str:
     opened_at = f["opened_at"]
-    description = _plain(description)
+    place = ", ".join(p for p in (_plain(f["city"], limit=_SHORT_FIELD_MAX), _plain(f["country_name"], limit=_SHORT_FIELD_MAX)) if p)
+    patient_bits = " · ".join(b for b in (
+        _plain(f["patient_name"], limit=_SHORT_FIELD_MAX),
+        f"גיל {f['patient_age']}" if f["patient_age"] not in (None, "") else "",
+        _plain(_HEBREW_GENDER.get(f["patient_gender"], f["patient_gender"])),
+        f"{_LRM}{_plain(f['patient_phone'], limit=40)}{_LRM}" if _plain(f["patient_phone"]) else "",
+    ) if b)
+    reporter_bits = " · ".join(b for b in (
+        _plain(f["filer_name"], limit=_SHORT_FIELD_MAX),
+        f"{_LRM}{_plain(f['filer_phone'], limit=40)}{_LRM}" if _plain(f["filer_phone"]) else "",
+    ) if b)
 
-    parts = [
-        "🚨 *דוח אירוע חדש | חברים מחלצים*",
-        f"🗓️ {opened_at.strftime('%d/%m/%Y')} · {opened_at.strftime('%H:%M')}",
-        _RULE,
-        "",
+    lines = [
+        f"🚨 *דוח אירוע חדש | חברים מחלצים*{_SEP}🗓️ {opened_at.strftime('%d/%m/%Y')} · {opened_at.strftime('%H:%M')}",
+        _join([
+            _field("סיווג", _HEBREW_TYPE.get(f["incident_type"], f["incident_type"])),
+            f"📍 *מיקום:* {place}" if place else "",
+        ]),
+        f"📝 *תיאור:* {_plain(description)}" if _plain(description) else "",
+        _join([
+            f"👤 *מדווח:* {reporter_bits}" if reporter_bits else "",
+            f"🩺 *נפגע:* {patient_bits}" if patient_bits else "",
+        ]),
+        _join([
+            f"🔗 {f['incident_url']}" if f["incident_url"] else "",
+            f"🆔 {f['monday_item_id']}" if f["monday_item_id"] else "",
+        ]),
     ]
-    classification = [_line("סוג", _HEBREW_TYPE.get(f["incident_type"], f["incident_type"]))]
-    if description:
-        classification += ["*תיאור:*", _quote(description)]
-    parts += _section("📋", "סיווג האירוע", classification)
-    parts += _section("📍", "מיקום", [
-        _line("מדינה", f["country_name"]),
-        _line("עיר", f["city"]),
-    ])
-    parts += _section("👤", "פרטי המדווח", [
-        _line("שם מלא", f["filer_name"]),
-        _line("טלפון", f["filer_phone"], ltr=True),
-    ])
-    parts += _section("🩺", "פרטי הנפגע", [
-        _line("שם מלא", f["patient_name"]),
-        _line("טלפון", f["patient_phone"], ltr=True),
-        _line("מגדר", _HEBREW_GENDER.get(f["patient_gender"], f["patient_gender"])),
-        _line("גיל", f["patient_age"]),
-    ])
-
-    parts.append(_RULE)
-    if f["incident_url"]:
-        parts += ["🔗 *לפתיחת האירוע באפליקציה*", f["incident_url"], ""]
-    if f["monday_item_id"]:
-        parts.append(f"🆔 מזהה אירוע: {f['monday_item_id']}")
-    return "\n".join(parts).strip()
+    return "\n".join(ln for ln in lines if ln)
 
 
 def build_incident_report(
@@ -141,12 +147,12 @@ def build_incident_report(
     incident_id: int | None = None,
     opened_at: datetime | None = None,
 ) -> str:
-    """The report text, in the team's standard "דוח אירוע" layout, styled with
-    WhatsApp's text formatting. Only fields the website actually collects are
-    included; optional ones are left out when empty. The form caps every field
-    well below WhatsApp's 4096-character limit, but if a report would ever
-    exceed it, the description (the only free-text field) is shortened — never
-    the link or the event id at the bottom."""
+    """The report text, in the team's standard "דוח אירוע" layout, as at most
+    MAX_LINES single-line rows (see the module docstring for why). Only fields
+    the website actually collects are included; optional ones are left out
+    when empty. When the whole thing would not fit a template body, the
+    description — the only long free-text field — is shortened, never the
+    link or the event id."""
     fields = dict(
         incident_type=incident_type, city=city, country_name=country_name,
         filer_name=filer_name, filer_phone=filer_phone, patient_name=patient_name,
@@ -156,11 +162,12 @@ def build_incident_report(
         opened_at=(opened_at or datetime.now(timezone.utc)).astimezone(_REPORT_TZ),
     )
 
-    text = _compose(description=description, **fields)
+    text = _compose(description=description, f=fields)
     overflow = len(text) - _MAX_MESSAGE_LEN
     if overflow > 0:
-        keep = max(0, len(description.strip()) - overflow - len(_TRUNCATION_NOTE) - 8)
-        text = _compose(description=description.strip()[:keep].rstrip() + _TRUNCATION_NOTE, **fields)
+        shortened = _plain(description)
+        keep = max(0, len(shortened) - overflow - 1)
+        text = _compose(description=shortened[:keep].rstrip() + _ELLIPSIS, f=fields)
     return text[:_MAX_MESSAGE_LEN]
 
 
