@@ -327,6 +327,124 @@ function VolunteerJoinCard({ incidentId, alreadyRequested, onRequested }: {
   );
 }
 
+// ── Admin-only: decide on a "New Request by User" without leaving the page ──
+type TriageOutcome = { kind: 'approved' } | { kind: 'declined'; reason: string };
+
+const DECLINE_REASONS = [
+  'Outside what we can help with',
+  'Duplicate of an existing request',
+  'Not enough details to act on',
+];
+
+function TriageCard({ mondayItemId, hasCallerAccount, outcome, onDecided }: {
+  mondayItemId: string;
+  hasCallerAccount: boolean;
+  outcome: TriageOutcome | null;
+  onDecided: (outcome: TriageOutcome) => void;
+}) {
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  const [error, setError] = useState('');
+
+  const decide = async (action: 'approve' | 'reject') => {
+    setBusy(action);
+    setError('');
+    try {
+      const res = await fetch(`/api/staff/monday-incidents/${mondayItemId}/${action}`, {
+        method: 'POST',
+        headers: action === 'reject' ? { 'Content-Type': 'application/json' } : undefined,
+        body: action === 'reject' ? JSON.stringify({ reason: reason.trim() }) : undefined,
+      });
+      const json = await res.json();
+      if (json.success) onDecided(action === 'approve' ? { kind: 'approved' } : { kind: 'declined', reason: reason.trim() });
+      else setError(json.message || `Could not ${action === 'approve' ? 'approve' : 'decline'} this request. Please try again.`);
+    } catch {
+      setError('Network error. Nothing was changed, please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (outcome) {
+    const approved = outcome.kind === 'approved';
+    return (
+      <section className={`staff-triage staff-triage--${approved ? 'approved' : 'declined'}`} role="status" aria-live="polite">
+        <div className="staff-triage-result">
+          <span className="staff-triage-result-icon" aria-hidden="true">{approved ? '✓' : '✕'}</span>
+          <div>
+            <div className="staff-triage-title">{approved ? 'Approved. Work can begin.' : 'Request declined'}</div>
+            <p className="staff-triage-text">
+              {approved
+                ? 'This incident is now In progress, and volunteers can ask to join it.'
+                : <>Reason on record: {outcome.reason}</>}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="staff-triage" aria-label="Decision needed">
+      <div className="staff-triage-eyebrow"><span className="staff-triage-dot" />Needs your decision</div>
+
+      {!declining ? (
+        <>
+          <h2 className="staff-triage-title">Review this request</h2>
+          <p className="staff-triage-text">
+            Approve it to start work: it moves to In progress and volunteers can ask to join.
+            Decline it to close the request with a reason.
+          </p>
+          {error && <div className="staff-error" style={{ marginBottom: 12 }}>{error}</div>}
+          <div className="staff-triage-actions">
+            <button className="staff-btn staff-btn--primary staff-btn--lg" disabled={busy !== null} onClick={() => decide('approve')}>
+              {busy === 'approve' ? 'Approving…' : 'Approve and start work'}
+            </button>
+            <button className="staff-btn staff-btn--danger staff-btn--lg" disabled={busy !== null} onClick={() => { setDeclining(true); setError(''); }}>
+              Decline
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <h2 className="staff-triage-title">Decline this request</h2>
+          <p className="staff-triage-text">
+            {hasCallerAccount
+              ? 'The caller will see this reason on their case page, so please keep it kind and clear.'
+              : 'The reason is saved with the case. This request has no app account, so the caller will not see it.'}
+          </p>
+          <div className="staff-triage-chips">
+            {DECLINE_REASONS.map(r => (
+              <button key={r} type="button" className="staff-chip" onClick={() => setReason(r)} disabled={busy !== null}>{r}</button>
+            ))}
+          </div>
+          <textarea
+            className="staff-field"
+            rows={3}
+            autoFocus
+            value={reason}
+            maxLength={2000}
+            placeholder="Why this request is being declined"
+            onChange={e => setReason(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') setDeclining(false);
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && reason.trim() && busy === null) decide('reject');
+            }}
+          />
+          {error && <div className="staff-error" style={{ marginTop: 10, marginBottom: 0 }}>{error}</div>}
+          <div className="staff-triage-actions" style={{ marginTop: 12 }}>
+            <button className="staff-btn staff-btn--danger-solid staff-btn--lg" disabled={busy !== null || !reason.trim()} onClick={() => decide('reject')}>
+              {busy === 'reject' ? 'Declining…' : 'Decline request'}
+            </button>
+            <button className="staff-btn staff-btn--lg" disabled={busy !== null} onClick={() => setDeclining(false)}>Back</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 // ── Admin-only: invite the caller of a Monday-entered incident ──────────────
 interface CallerInvite {
   email: string;
@@ -864,6 +982,9 @@ export default function IncidentDetailPage() {
   const [joined, setJoined] = useState(true);
   const [joinRequested, setJoinRequested] = useState(false);
   const [volunteerRequests, setVolunteerRequests] = useState<VolunteerRequest[]>([]);
+  // What the admin just decided on a new request, kept so the confirmation
+  // stays on screen after the incident's status changes underneath it.
+  const [triageOutcome, setTriageOutcome] = useState<TriageOutcome | null>(null);
 
   const loadIncident = useCallback((opts?: { silent?: boolean }) => {
     if (!id) return;
@@ -1019,7 +1140,16 @@ export default function IncidentDetailPage() {
       >
         <div className="staff-incident-grid">
           <div className="staff-incident-main">
-            {isOwner && inc.incident_status_en === 'Rejected' && (
+            {relation === 'admin' && inc.monday_item_id && (inc.incident_status_en === 'New Request by User' || triageOutcome) && (
+              <TriageCard
+                mondayItemId={inc.monday_item_id}
+                hasCallerAccount={!!inc.owner}
+                outcome={triageOutcome}
+                onDecided={outcome => { setTriageOutcome(outcome); loadIncident({ silent: true }); }}
+              />
+            )}
+
+            {(isOwner || relation === 'admin') && !triageOutcome && inc.incident_status_en === 'Rejected' && (
               <div className="staff-error">
                 This request was declined{inc.rejection_reason ? `: ${inc.rejection_reason}` : '.'}
               </div>
