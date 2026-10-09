@@ -64,8 +64,8 @@ _COUNTRY_CODE_BY_NAME = {v: k for k, v in COUNTRY_NAME_BY_CODE.items()}
 from app.extensions import db
 from app.services.auth_service import AuthError, current_user, validate_email
 from app.services.account_service import user_has_role
-from app.services import incident_service
-from app.models import Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
+from app.services import incident_service, intake_officer_service
+from app.models import IntakeOfficer, Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
 
 incidents_bp = Blueprint('incidents', __name__)
 
@@ -1416,6 +1416,81 @@ def staff_agent_chat_link():
     digits = whatsapp_service.to_e164(AGENT_WHATSAPP_NUMBER).lstrip('+')
     link = f"https://wa.me/{digits}?text={quote('@חמל קליטה')}" if digits else None
     return jsonify({'success': True, 'link': link}), 200
+
+
+# ── Intake officers: who may talk to the incident agent on WhatsApp ──────────
+# Admin-only. The website is the source of truth; every change is pushed to the
+# agent as the full active list (see intake_officer_service), and the response says
+# whether the agent was updated, so the admin never has to guess.
+
+def _serialize_officer(officer) -> dict:
+    return {
+        'id': officer.id,
+        'full_name': officer.full_name,
+        'phone': officer.phone,
+        'added_by': officer.added_by.full_name if officer.added_by else None,
+        'created_at': officer.created_at.isoformat() if officer.created_at else None,
+    }
+
+
+def _officers_response(extra=None, status=200):
+    from app.features.incidents import agent_service
+    body = {
+        'success': True,
+        'officers': [_serialize_officer(o) for o in intake_officer_service.list_active()],
+        'agent_configured': agent_service.is_configured(),
+    }
+    body.update(extra or {})
+    return jsonify(body), status
+
+
+@incidents_bp.route('/api/staff/intake-officers', methods=['GET'])
+def list_intake_officers():
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    return _officers_response()
+
+
+@incidents_bp.route('/api/staff/intake-officers', methods=['POST'])
+def add_intake_officer():
+    """Give an officer access to the agent. Name and number are both required."""
+    from flask import request
+    admin = _staff_role_check(admin_only=True)
+    if admin is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    body = request.get_json(silent=True) or {}
+    try:
+        officer = intake_officer_service.add(
+            phone=str(body.get('phone', '')), full_name=str(body.get('full_name', '')), admin=admin,
+        )
+    except intake_officer_service.OfficerError as e:
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+
+    synced = intake_officer_service.sync()
+    return _officers_response({'officer': _serialize_officer(officer), 'synced': synced})
+
+
+@incidents_bp.route('/api/staff/intake-officers/<int:officer_id>', methods=['DELETE'])
+def remove_intake_officer(officer_id):
+    """Take an officer's access away (effective on the agent's next message)."""
+    admin = _staff_role_check(admin_only=True)
+    if admin is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    officer = db.session.get(IntakeOfficer, officer_id)
+    if officer is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    intake_officer_service.remove(officer, admin=admin)
+    return _officers_response({'synced': intake_officer_service.sync()})
+
+
+@incidents_bp.route('/api/staff/intake-officers/sync', methods=['POST'])
+def sync_intake_officers():
+    """Send the current list to the agent again (after it was unreachable, or to be sure)."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    return _officers_response({'synced': intake_officer_service.sync()})
 
 
 @incidents_bp.route('/api/staff/admin-dashboard')

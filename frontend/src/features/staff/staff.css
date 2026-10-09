@@ -55,6 +55,15 @@
 .staff-nav-link:hover { background: rgba(0, 0, 0, 0.05); color: var(--s-text); }
 .staff-nav-link.active { background: var(--s-surface); color: var(--s-text); box-shadow: 0 0 0 1px var(--s-border); }
 .staff-nav-link svg { width: 16px; height: 16px; flex-shrink: 0; }
+/* ── Intake officers page ── */
+.staff-notice { padding: 10px 14px; margin-bottom: 14px; border-radius: 8px; font-size: 13px; background: var(--s-accent-soft); color: var(--s-text); }
+.staff-notice--ok { background: var(--s-green-soft); color: var(--s-green); }
+.staff-notice--warn { background: var(--s-amber-soft); color: var(--s-amber); }
+.staff-notice--error { background: var(--s-red-soft); color: var(--s-red); }
+.staff-officer-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.staff-officer-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 500; color: var(--s-muted); }
+@media (max-width: 760px) { .staff-officer-form { grid-template-columns: minmax(0, 1fr); } }
+
 /* "Report a call": the one action in the rail that starts work, so it is the one filled button */
 .staff-report-call {
   display: flex; align-items: center; justify-content: center; gap: 8px; margin: 4px 0 14px;

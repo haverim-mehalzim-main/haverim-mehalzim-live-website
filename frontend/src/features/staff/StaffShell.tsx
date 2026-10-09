@@ -24,6 +24,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/staff/admin-dashboard', label: 'Dashboard', icon: ICONS.dashboard },
   { to: '/staff/requests', label: 'New requests', icon: ICONS.inbox },
   { to: '/staff/in-progress', label: 'In progress', icon: ICONS.activity },
+  { to: '/staff/intake-officers', label: 'Intake officers', icon: ICONS.user },
 ];
 const VOLUNTEER_NAV: NavItem[] = [
   { to: '/staff/volunteer-dashboard', label: 'Dashboard', icon: ICONS.dashboard },

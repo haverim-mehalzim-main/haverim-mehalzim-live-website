@@ -44,6 +44,26 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(monday_sync_bp)
 
+    # The agent keeps its own copy of the officers list. Send it again whenever the
+    # site starts, so the two can't drift apart after a missed update (and so the very
+    # first list reaches the agent). Delayed and on a background thread: it retries,
+    # and must never slow down or break startup.
+    if config.AGENT_BASE_URL and config.AGENT_API_SECRET and not app.config.get('TESTING'):
+        import threading
+
+        def _sync_officers_on_start():
+            try:
+                with app.app_context():
+                    from app.services import intake_officer_service
+                    ok = intake_officer_service.sync(retry=True)
+                    print(f"[officers] startup sync with the agent: {'ok' if ok else 'failed'}")
+            except Exception as e:  # noqa: BLE001 — diagnostics only
+                print(f"[officers] startup sync error: {e}")
+
+        timer = threading.Timer(20, _sync_officers_on_start)
+        timer.daemon = True
+        timer.start()
+
     # Tranzila POSTs the payment result back to the redirect URLs. The SPA
     # fallback below only serves GET, so a POST would 405. Bounce it to GET
     # (303) so React renders the thanks/failed page cleanly and a refresh

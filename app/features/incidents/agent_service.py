@@ -28,6 +28,8 @@ from app.config import AGENT_API_SECRET, AGENT_BASE_URL
 _TIMEOUT_SECONDS = 10
 # The agent's endpoint for new-incident reports; the base address is configuration.
 _REPORT_PATH = "/incident-report"
+# The agent's endpoint for the list of officers allowed to message it.
+_OFFICERS_PATH = "/api/officers"
 # Pause before the 2nd and 3rd attempt. Long enough to ride out an agent
 # redeploy starting up, short enough that the WhatSable fallback isn't far behind.
 _RETRY_PAUSES = (2, 8)
@@ -37,32 +39,47 @@ def is_configured() -> bool:
     return bool(AGENT_BASE_URL and AGENT_API_SECRET)
 
 
-def send_report(payload: dict) -> bool:
-    """POST the report payload to the agent. True once the agent accepted it."""
+def _post(path: str, payload: dict, *, pauses: tuple, what: str) -> bool:
+    """POST `payload` to the agent. True once it answered 200. `pauses` are the waits
+    before each retry (empty = a single attempt)."""
     if not is_configured():
         return False
 
-    attempts = len(_RETRY_PAUSES) + 1
-    for attempt, pause in enumerate((0, *_RETRY_PAUSES), start=1):
+    attempts = len(pauses) + 1
+    for attempt, pause in enumerate((0, *pauses), start=1):
         if pause:
             time.sleep(pause)
         try:
             resp = requests.post(
-                f"{AGENT_BASE_URL}{_REPORT_PATH}",
+                f"{AGENT_BASE_URL}{path}",
                 json=payload,
                 headers={"Authorization": f"Bearer {AGENT_API_SECRET}"},
                 timeout=_TIMEOUT_SECONDS,
             )
         except requests.RequestException as e:
-            print(f"[agent] attempt {attempt}/{attempts} failed: {e.__class__.__name__}")
+            print(f"[agent] {what}: attempt {attempt}/{attempts} failed: {e.__class__.__name__}")
             continue
 
         if resp.status_code == 200:
             return True
         if resp.status_code < 500:
-            print(f"[agent] report refused: HTTP {resp.status_code} (check AGENT_API_SECRET matches the agent's)")
+            print(f"[agent] {what} refused: HTTP {resp.status_code} (check AGENT_API_SECRET matches the agent's)")
             return False
-        print(f"[agent] attempt {attempt}/{attempts}: HTTP {resp.status_code}")
+        print(f"[agent] {what}: attempt {attempt}/{attempts}: HTTP {resp.status_code}")
 
-    print("[agent] gave up — the agent did not accept the report")
+    print(f"[agent] gave up — the agent did not accept the {what}")
     return False
+
+
+def send_report(payload: dict) -> bool:
+    """POST a new-incident report to the agent. True once the agent accepted it."""
+    return _post(_REPORT_PATH, payload, pauses=_RETRY_PAUSES, what="report")
+
+
+def push_officers(officers: list, *, retry: bool = True) -> bool:
+    """Replace the agent's list of officers allowed to message it. `officers` is the
+    FULL active list ([{number, name}]); the agent swaps its copy for it, so sending
+    it twice changes nothing. An admin clicking "add" gets a single quick attempt
+    (retry=False) so the page answers fast and says plainly if the agent could not
+    be updated; the startup sync retries."""
+    return _post(_OFFICERS_PATH, {"officers": officers}, pauses=_RETRY_PAUSES if retry else (), what="officers list")
