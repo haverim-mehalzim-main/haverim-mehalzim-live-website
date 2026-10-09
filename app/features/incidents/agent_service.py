@@ -3,7 +3,7 @@ Hands a new-incident report to the incident-management agent.
 
 The agent runs in its own Railway project with a WhatsApp connection and posts
 the report to the team's group. This module only delivers the report to it —
-POST <AGENT_BASE_URL>/incident-report with AGENT_API_SECRET as a Bearer token — and says
+POST <AGENT_BASE_URL>/api/incident-report with AGENT_API_SECRET as a Bearer token — and says
 whether the agent took it.
 
 Delivery contract (the agent's side is src/reports/gateway.js in its repo):
@@ -28,7 +28,7 @@ from app.config import AGENT_API_SECRET, AGENT_BASE_URL
 
 _TIMEOUT_SECONDS = 10
 # The agent's endpoint for new-incident reports; the base address is configuration.
-_REPORT_PATH = "/incident-report"
+_REPORT_PATH = "/api/incident-report"
 # The agent's endpoint for the list of officers allowed to message it.
 _OFFICERS_PATH = "/api/officers"
 # Pause before the 2nd and 3rd attempt. Long enough to ride out an agent
