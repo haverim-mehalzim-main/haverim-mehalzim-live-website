@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 from app.models import Incident, IncidentCallerInvite, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer, Payment, PaymentStatus
+from app.services import volunteer_alert_service
 from app.services.account_service import grant_role
 
 
@@ -268,10 +269,10 @@ def sync_local_incidents_from_monday(monday_rows: list[dict] | None) -> dict:
     """Create a shadow Incident row (user_id=None — no caller account, just a
     Monday item) for every row in monday_rows that doesn't have a local row
     yet, and refresh every existing row's copy of city / phone / description
-    from Monday. Returns {'created': n, 'updated': m}. Does not commit.
+    from Monday. Returns {'created': n, 'updated': m, 'alerted': k}. Does not commit.
     A failed Monday fetch (None) is a no-op, not an error."""
     rows_by_id = {str(row['id']): row for row in (monday_rows or []) if row.get('id')}
-    stats = {'created': 0, 'updated': 0}
+    stats = {'created': 0, 'updated': 0, 'alerted': 0}
     if not rows_by_id:
         return stats
     existing = {
@@ -287,6 +288,10 @@ def sync_local_incidents_from_monday(monday_rows: list[dict] | None) -> dict:
             mirror_monday_values(incident, row)
         elif mirror_monday_values(incident, row):
             stats['updated'] += 1
+        # A case that is now "Working on it" is open to volunteers: alert them
+        # once (see volunteer_alert_service). The emails go out after commit.
+        if volunteer_alert_service.claim_if_newly_in_progress(incident, row):
+            stats['alerted'] += 1
     return stats
 
 

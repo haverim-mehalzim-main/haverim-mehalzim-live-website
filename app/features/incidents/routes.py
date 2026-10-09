@@ -1691,7 +1691,11 @@ def approve_monday_incident(monday_item_id):
     if not ok:
         return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
 
-    incident_service.sync_local_incidents_from_monday([{'id': monday_item_id}])
+    # Re-read the case so the volunteer alert has its real type / country /
+    # urgency, and set the status we just wrote so a lagging read can't hide it.
+    row = (fetch_incidents_by_ids([monday_item_id]) or [{'id': monday_item_id}])[0]
+    row['status_mkmbjwef'] = 'Working on it'
+    incident_service.sync_local_incidents_from_monday([row])
     db.session.commit()
     return jsonify({'success': True, 'warnings': warnings}), 200
 

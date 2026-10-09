@@ -90,6 +90,10 @@ EMAIL_SENDER_ADDRESS = os.getenv("EMAIL_SENDER_ADDRESS", "info@haverimmehalzim.o
 # Where donor replies land. Defaults to the sender address.
 EMAIL_REPLY_TO       = os.getenv("EMAIL_REPLY_TO", "") or EMAIL_SENDER_ADDRESS
 
+# Email every volunteer when a case becomes "Working on it". On by default;
+# set VOLUNTEER_ALERTS_ENABLED=0 on Railway to switch it off without a deploy.
+VOLUNTEER_ALERTS_ENABLED = (os.getenv("VOLUNTEER_ALERTS_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off"))
+
 # ── WhatsApp incident report (WhatSable) ─────────────────────────────────────
 # Every newly opened call sends a Hebrew incident report to the team's WhatsApp
 # business number (WHATSAPP_BUSINESS_NUMBER, e.g. +972501234567 or 0501234567)

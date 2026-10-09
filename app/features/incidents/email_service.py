@@ -512,3 +512,126 @@ def send_caller_invite(to_email: str, to_name: str, invite_url: str, days_valid:
     except Exception as e:
         print(f"[email_service] send failed: {e}")
         return False
+
+
+def send_new_case_alert(
+    to_email: str,
+    to_name: str,
+    case_url: str,
+    type_en: str,
+    type_he: str,
+    country: str,
+    urgent: bool = False,
+) -> bool:
+    """Tell one volunteer that a case just became "Working on it" and is open
+    for volunteers. Deliberately carries NO personal details (no patient or
+    caller names, phones or description) — just type, country, urgency and a
+    link; volunteers log in to see the rest. Same best-effort contract as the
+    other sends: never raises, returns True/False."""
+    if not is_configured():
+        print("[email_service] BREVO_API_KEY / sender / PUBLIC_BASE_URL not set — skipping new-case alert")
+        return False
+    if not to_email:
+        return False
+
+    first_name = _first_name(to_name)
+    he_greeting = f"שלום {html.escape(first_name)}," if first_name else "שלום,"
+    en_greeting = f"Hi {html.escape(first_name)}," if first_name else "Hi,"
+    where = html.escape(country or "")
+    t_en = html.escape(type_en or "")
+    t_he = html.escape(type_he or type_en or "")
+
+    banner = (
+        '<tr><td style="background:#b91c1c;padding:12px 32px;text-align:center;color:#ffffff;'
+        'font-size:15px;font-weight:700;letter-spacing:1px;">🚨 URGENT · דחוף</td></tr>'
+        if urgent else ""
+    )
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="he">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;
+                    font-family:'Segoe UI',Arial,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.06);">
+        {banner}
+        <tr>
+          <td style="background:#0f172a;padding:26px 32px;text-align:center;">
+            <div style="color:#5eead4;font-size:13px;letter-spacing:2px;font-weight:700;">חברים מחלצים</div>
+            <div style="color:#e5e7eb;font-size:12px;margin-top:4px;">HAVERIM MEHALZIM</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;direction:rtl;text-align:right;">
+            <h1 style="margin:0 0 12px;font-size:20px;color:#0f172a;">{"דחוף: " if urgent else ""}אירוע חדש פתוח למתנדבים</h1>
+            <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#1f2937;">{he_greeting}</p>
+            <p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#0f172a;font-weight:700;">{t_he} · {where}</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">
+              האירוע אושר ונמצא כעת בטיפול. כדי לעזור, היכנסו לאתר, צפו באירוע ובקשו להצטרף. מנהל יאשר את הבקשה.
+            </p>
+            <div style="text-align:center;">{_button(case_url, "צפייה באירוע ←", True)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px 32px;direction:ltr;text-align:left;border-top:1px dashed #cbd5e1;">
+            <h1 style="margin:24px 0 12px;font-size:20px;color:#0f172a;">{"URGENT: " if urgent else ""}New case open for volunteers</h1>
+            <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#1f2937;">{en_greeting}</p>
+            <p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#0f172a;font-weight:700;">{t_en} · {where}</p>
+            <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#1f2937;">
+              This case has been approved and is now in progress. To help, log in, open the case and
+              request to join. An admin will approve your request.
+            </p>
+            <div style="text-align:center;">{_button(case_url, "View the case →", True)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:18px 32px;text-align:center;border-top:1px solid #eceff3;">
+            <div style="font-size:12px;color:#9ca3af;line-height:1.6;">
+              חברים מחלצים · Haverim Mehalzim<br>
+              קיבלתם הודעה זו כי אתם מתנדבים בחברים מחלצים · You receive this because you are a Haverim Mehalzim volunteer.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    text_body = "\n".join([
+        ("דחוף! " if urgent else "") + "אירוע חדש פתוח למתנדבים", "",
+        he_greeting, f"{type_he or type_en} · {country}",
+        "האירוע אושר ונמצא כעת בטיפול. היכנסו, צפו באירוע ובקשו להצטרף:", case_url,
+        "", "──────────  ENGLISH  ──────────", "",
+        ("URGENT! " if urgent else "") + "New case open for volunteers", "",
+        en_greeting, f"{type_en} · {country}",
+        "This case has been approved and is now in progress. Log in, open the case and request to join:", case_url,
+    ])
+
+    subject = (
+        f"🚨 URGENT · דחוף: {type_en} in {country}" if urgent
+        else f"New case: {type_en} in {country} · אירוע חדש"
+    )
+    payload = {
+        "sender":      {"name": EMAIL_SENDER_NAME, "email": EMAIL_SENDER_ADDRESS},
+        "to":          [{"email": to_email, "name": (to_name or "").strip() or to_email}],
+        "replyTo":     {"email": EMAIL_REPLY_TO, "name": EMAIL_SENDER_NAME},
+        "subject":     subject,
+        "htmlContent": html_body,
+        "textContent": text_body,
+        "tags":        ["new-case-alert", "urgent" if urgent else "standard"],
+    }
+    headers = {"api-key": BREVO_API_KEY, "content-type": "application/json", "accept": "application/json"}
+
+    try:
+        resp = requests.post(_BREVO_URL, json=payload, headers=headers, timeout=15)
+        if resp.status_code // 100 == 2:
+            print(f"[email_service] new-case alert sent to {to_email}")
+            return True
+        print(f"[email_service] Brevo error {resp.status_code}: {resp.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"[email_service] new-case alert failed: {e}")
+        return False

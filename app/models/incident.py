@@ -52,6 +52,11 @@ class Incident(db.Model):
     # first time the owner asks to share this incident — most incidents are
     # never shared, so there's no reason to mint a token at creation time.
     share_token = db.Column(db.Text, nullable=True, unique=True)
+    # Set the moment volunteers were alerted that this case is now "Working
+    # on it" (see volunteer_alert_service). NULL = not alerted yet. It is also
+    # the once-only guard: webhook, reconcile job and the approve button can
+    # all see the same transition, and only the first one to claim it sends.
+    volunteers_notified_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
 
     user = db.relationship("User", back_populates="incidents")
