@@ -20,6 +20,7 @@ up the caller who just opened the call.
 """
 
 import time
+from urllib.parse import urlparse
 
 import requests
 
@@ -35,8 +36,31 @@ _OFFICERS_PATH = "/api/officers"
 _RETRY_PAUSES = (2, 8)
 
 
+_warned_insecure = False
+
+
+def _is_secure(base_url: str) -> bool:
+    """https only. This address receives AGENT_API_SECRET on every call; over plain
+    http it would cross the network in the clear (and requests would send it again on a
+    redirect). A local address is allowed so the agent can be run next to the site for
+    development."""
+    parsed = urlparse(base_url)
+    return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1"))
+
+
 def is_configured() -> bool:
-    return bool(AGENT_BASE_URL and AGENT_API_SECRET)
+    """True only when the agent is configured AND reachable over https. An insecure
+    address is treated as not configured (with a loud, once-only log), so the secret is
+    never sent in the clear and reports simply take the WhatSable fallback."""
+    global _warned_insecure
+    if not (AGENT_BASE_URL and AGENT_API_SECRET):
+        return False
+    if not _is_secure(AGENT_BASE_URL):
+        if not _warned_insecure:
+            _warned_insecure = True
+            print("[agent] AGENT_BASE_URL must start with https:// — the agent is disabled so the secret is never sent in the clear")
+        return False
+    return True
 
 
 def _post(path: str, payload: dict, *, pauses: tuple, what: str) -> bool:

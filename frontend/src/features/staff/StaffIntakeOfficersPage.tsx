@@ -100,7 +100,7 @@ function Officers() {
         <h2 className="staff-section-title">Add an officer</h2>
         {first && (
           <p className="staff-row-meta" style={{ marginBottom: 12 }}>
-            Until you add someone here, the agent uses its built-in list. <strong>Once you add the first officer, this list replaces it</strong>, so add everyone who should keep access, starting with yourself.
+            Right now <strong>nobody can message the agent</strong>. Only officers added here can, so add everyone who should have access, starting with yourself.
           </p>
         )}
         <form className="staff-officer-form" onSubmit={add}>

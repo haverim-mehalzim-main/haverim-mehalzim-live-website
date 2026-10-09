@@ -98,9 +98,9 @@ def sync(*, retry: bool = False):
     if not agent_service.is_configured():
         return None
     # Never push a list nobody has ever managed. The agent treats a received list as
-    # the only truth, so an empty one sent before any officer was added here would
-    # lock out everyone on its old DM_ALLOWED_NUMBERS list. After officers have been
-    # managed, an empty list is legitimate (the last one was removed) and is sent.
+    # the only truth, so an empty one sent from a fresh or wiped database here would
+    # silently replace (and lock out) the officers it already has. After officers have
+    # been managed, an empty list is legitimate (the last one was removed) and is sent.
     if IntakeOfficer.query.count() == 0:
         return None
     return agent_service.push_officers(agent_payload(), retry=retry)
