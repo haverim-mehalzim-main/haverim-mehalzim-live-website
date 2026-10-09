@@ -1400,6 +1400,24 @@ def my_donations():
 # endpoints still use — this surface is used by volunteer accounts too, not
 # just admins, so a shared secret token was never the right fit for it.
 
+@incidents_bp.route('/api/staff/agent-chat-link')
+def staff_agent_chat_link():
+    """Admin-only: the WhatsApp link behind the command center's "Report a call"
+    button. It opens a chat with the incident agent and a ready first message
+    (`@חמל קליטה`) that starts an intake there. `link` is null when the agent's
+    number isn't configured, and the button simply isn't shown. Whether someone
+    may actually start an intake is decided by the agent (its approved-numbers
+    list), not by this link."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    from urllib.parse import quote
+    from app.config import AGENT_WHATSAPP_NUMBER
+    digits = whatsapp_service.to_e164(AGENT_WHATSAPP_NUMBER).lstrip('+')
+    link = f"https://wa.me/{digits}?text={quote('@חמל קליטה')}" if digits else None
+    return jsonify({'success': True, 'link': link}), 200
+
+
 @incidents_bp.route('/api/staff/admin-dashboard')
 def staff_admin_dashboard():
     """Admin-only management dashboard: workload and pipeline across the

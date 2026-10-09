@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './staff.css';
@@ -17,6 +17,7 @@ const ICONS = {
   check: svg(<><circle cx="8" cy="8" r="6" /><path d="M5.5 8.2l1.8 1.8 3.2-3.6" /></>),
   user: svg(<><circle cx="8" cy="5.5" r="2.5" /><path d="M3 13.5c.6-2.4 2.5-3.5 5-3.5s4.4 1.1 5 3.5" /></>),
   globe: svg(<><circle cx="8" cy="8" r="6" /><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" /></>),
+  chat: svg(<><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" /><path d="M5.5 6.5h5" /></>),
 };
 
 const ADMIN_NAV: NavItem[] = [
@@ -30,16 +31,40 @@ const VOLUNTEER_NAV: NavItem[] = [
   { to: '/staff/participated', label: 'My cases', icon: ICONS.check },
 ];
 
+// "Report a call": opens a WhatsApp chat with the incident agent and a ready first
+// message that starts an intake (the officer then types what the caller says).
+// Admins only, and only when the agent's number is configured on the server.
+function useAgentChatLink(enabled: boolean) {
+  const [link, setLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    fetch('/api/staff/agent-chat-link')
+      .then(r => r.json())
+      .then(j => { if (!cancelled && j.success) setLink(j.link || null); })
+      .catch(() => { /* no button — the rest of the console is unaffected */ });
+    return () => { cancelled = true; };
+  }, [enabled]);
+  return link;
+}
+
 export function StaffShell({ title, subtitle, actions, children }: {
   title: string; subtitle?: string; actions?: ReactNode; children: ReactNode;
 }) {
   const { user } = useAuth();
-  const nav = user?.primary_role === 'admin' ? ADMIN_NAV : VOLUNTEER_NAV;
+  const isAdmin = user?.primary_role === 'admin';
+  const nav = isAdmin ? ADMIN_NAV : VOLUNTEER_NAV;
+  const chatLink = useAgentChatLink(isAdmin);
 
   return (
     <div className="staff-ui">
       <aside className="staff-rail">
         <div className="staff-brand"><span className="staff-brand-mark" />Haverim Mehalzim</div>
+        {chatLink && (
+          <a href={chatLink} target="_blank" rel="noopener noreferrer" className="staff-report-call">
+            {ICONS.chat}<span>Report a call</span>
+          </a>
+        )}
         <nav className="staff-nav">
           {nav.map(item => (
             <NavLink key={item.to} to={item.to} className={({ isActive }) => `staff-nav-link${isActive ? ' active' : ''}`}>

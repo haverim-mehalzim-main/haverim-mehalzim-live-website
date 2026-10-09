@@ -108,3 +108,9 @@ WHATSABLE_SEND_URL   = os.getenv("WHATSABLE_SEND_URL", "https://dashboard.whatsa
 # and is shared by everything the site calls there.
 AGENT_BASE_URL   = (os.getenv("AGENT_BASE_URL") or "").strip().rstrip("/")
 AGENT_API_SECRET = (os.getenv("AGENT_API_SECRET") or "").strip()
+
+# The agent's own WhatsApp number (the account it is linked to), for the command
+# center's "Report a call" button: it opens a chat with that number and a ready
+# first message that starts an intake. Any format works (+972..., 050-...);
+# not a secret — it is a phone number people already message.
+AGENT_WHATSAPP_NUMBER = (os.getenv("AGENT_WHATSAPP_NUMBER") or "").strip()
