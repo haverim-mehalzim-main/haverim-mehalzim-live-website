@@ -115,6 +115,41 @@ def create_task(*, incident_id: int, assignee: str, title: str, description: str
     return task
 
 
+# Tasks every caller gets the moment an admin approves their request, in this
+# order. To add another default, append a dict here — nothing else to change.
+DEFAULT_CASE_TASKS = [
+    {
+        'assignee': 'user',
+        'title': 'Sign the Service Agreement',
+        'description': (
+            'Please fill in and sign our Service Agreement so we can start helping: '
+            'https://forms.monday.com/forms/fe5bc533e9937d8b783501774fde2646?r=euc1'
+        ),
+    },
+]
+
+
+def add_default_tasks(incident: Incident) -> int:
+    """Give an approved incident its default tasks. Safe to call twice: a task
+    whose title is already on the incident is skipped, so an admin who deleted
+    or edited one doesn't get a duplicate and a re-approval adds nothing.
+    Adds to the session without committing; returns how many were added."""
+    have = {t.title for t in IncidentTask.query.filter_by(incident_id=incident.id).all()}
+    added = 0
+    for order, spec in enumerate(DEFAULT_CASE_TASKS):
+        if spec['title'] in have:
+            continue
+        db.session.add(IncidentTask(
+            incident_id=incident.id,
+            assignee=IncidentTaskAssignee(spec['assignee']),
+            title=spec['title'],
+            description=spec.get('description') or None,
+            sort_order=order,
+        ))
+        added += 1
+    return added
+
+
 def update_task(task: IncidentTask, *, title: str | None = None, description: str | None = None,
                  status: str | None = None, sort_order: int | None = None) -> IncidentTask:
     if title is not None:

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { CountryCombobox } from './CountryCombobox';
 import './account.css';
 import './people.css';
 
@@ -200,13 +201,10 @@ export default function OpenCallPage() {
                 />
               </Field>
               <Field id="countryCode" label="Country" error={errors.countryCode}>
-                <select
-                  id="countryCode" className="account-select" value={countryCode} autoComplete="country"
-                  onChange={e => { setCountryCode(e.target.value); clear('countryCode'); }}
-                >
-                  <option value="">Select a country</option>
-                  {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
+                <CountryCombobox
+                  id="countryCode" value={countryCode} countries={countries}
+                  onChange={code => { setCountryCode(code); clear('countryCode'); }}
+                />
               </Field>
             </div>
 

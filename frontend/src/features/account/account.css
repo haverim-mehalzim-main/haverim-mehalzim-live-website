@@ -469,3 +469,22 @@
 /* Case-details read view: each group is a title plus its own rows. */
 .account-field-groups { gap: 22px 28px; }
 .account-field-groups > div > .account-field-group-title { margin-top: 0; }
+
+/* ── Typeable country picker ── */
+.combo { position: relative; }
+.combo-input { padding-right: 36px; }
+.combo-caret {
+  position: absolute; right: 14px; top: 50%; width: 7px; height: 7px; margin-top: -6px;
+  border-right: 2px solid var(--text-secondary); border-bottom: 2px solid var(--text-secondary);
+  transform: rotate(45deg); pointer-events: none;
+}
+.combo-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px);
+  margin: 0; padding: 4px; list-style: none; max-height: 264px; overflow-y: auto;
+  background: var(--bg-elevated); border: 1px solid var(--border-mid); border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.combo-option, .combo-empty { padding: 10px 12px; border-radius: 6px; font-size: 14px; color: var(--text-primary); cursor: pointer; }
+.combo-option.is-active { background: rgba(127, 127, 127, 0.18); }
+.combo-option.is-selected { color: var(--accent-teal); font-weight: 600; }
+.combo-empty { color: var(--text-secondary); cursor: default; }

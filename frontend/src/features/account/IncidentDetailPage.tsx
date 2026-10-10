@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { CountryCombobox } from './CountryCombobox';
+import LinkifiedText from '../../components/LinkifiedText';
 import CaseJourney from '../../components/CaseJourney';
 import CaseCompletion from '../../components/CaseCompletion';
 import CaseProgressSummary from '../../components/CaseProgressSummary';
@@ -106,7 +108,7 @@ function TaskList({ title, tasks }: { title: string; tasks: Task[] }) {
             </div>
             <div>
               <div className={`account-task-title ${t.status === 'done' ? 'account-task-title--done' : ''}`}>{t.title}</div>
-              {t.description && <div className="account-task-desc">{t.description}</div>}
+              {t.description && <div className="account-task-desc"><LinkifiedText text={t.description} /></div>}
             </div>
           </div>
         ))
@@ -225,7 +227,7 @@ function StaffTaskRow({ task, incidentId, canManage, onChanged, onDeleted }: {
             {task.assignee}
           </span>
         </div>
-        {task.description && <div className="account-task-desc">{task.description}</div>}
+        {task.description && <div className="account-task-desc"><LinkifiedText text={task.description} /></div>}
       </div>
       {canManage && (
         <button onClick={remove} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>✕</button>
@@ -837,13 +839,10 @@ function EditCaseCard({ incident, canEdit, onSaved }: {
         </label>
 
         <div className="account-form-section-title">Location and timeline</div>
-        <label className="account-label">
-          Country
-          <select className="account-select" value={form.countryCode} onChange={e => set('countryCode', e.target.value)}>
-            <option value="">— Select —</option>
-            {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-          </select>
-        </label>
+        <div className="account-label">
+          <label htmlFor="edit-country">Country</label>
+          <CountryCombobox id="edit-country" value={form.countryCode} countries={countries} onChange={code => set('countryCode', code)} />
+        </div>
         <TextField label="City / area" value={form.city} onChange={v => set('city', v)} placeholder="e.g. Netanya (country is separate, below)" />
         <TextField label="Date/time request received" value={form.inRequestAt} onChange={v => set('inRequestAt', v)} placeholder="e.g. 2026-09-21 14:32" />
         <TextField label="Date/time case closed" value={form.closedAt} onChange={v => set('closedAt', v)} placeholder="e.g. 2026-09-22 09:00" />

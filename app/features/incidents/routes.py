@@ -1724,6 +1724,15 @@ def approve_monday_incident(monday_item_id):
     row['status_mkmbjwef'] = 'Working on it'
     row['color_mkvvrm1r'] = GROUP_OPENED
     incident_service.sync_local_incidents_from_monday([row])
+    # The caller's starter to-dos (Service Agreement, ...). Best-effort: the
+    # approval is already on Monday, so a hiccup here must not undo or fail it.
+    try:
+        with db.session.begin_nested():
+            local = Incident.query.filter_by(monday_item_id=str(monday_item_id)).first()
+            if local is not None:
+                incident_service.add_default_tasks(local)
+    except Exception as e:
+        print(f"[approve] could not add default tasks for {monday_item_id}: {e}")
     db.session.commit()
     return jsonify({'success': True, 'warnings': warnings}), 200
 
