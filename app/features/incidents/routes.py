@@ -1,7 +1,7 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
 from app.features.incidents.service import fetch_monday_data, create_incident, update_incident, fetch_incidents_by_ids, compose_location
-from app.features.incidents.tracker_service import fetch_case_status
+from app.features.incidents.tracker_service import fetch_case_status, progress_from_row
 from app.features.incidents.donor_service import fetch_donor_by_token, is_valid_token_format, fetch_leaderboard
 from app.features.incidents.feedback_service import (
     post_feedback_to_monday,
@@ -1162,6 +1162,10 @@ def incident_detail(local_id):
 
     if relation == 'owner':
         tasks = incident_service.list_tasks(incident.id)
+        # The same warm 8-step progress a family member sees, so the caller
+        # gets the at-a-glance "where things stand" too. Built from the Monday
+        # row already fetched above — no extra call.
+        serialized['progress'] = progress_from_row(monday_row)
         return jsonify({
             'success': True,
             'relation': relation,

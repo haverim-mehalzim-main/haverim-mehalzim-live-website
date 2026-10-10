@@ -48,6 +48,29 @@ def _parse_step(label: str) -> dict:
     return STEP_DEFINITIONS[0]
 
 
+def progress_from_row(row: dict | None) -> dict | None:
+    """The same progress dict fetch_case_status returns, built from a Monday
+    row the caller has ALREADY fetched (it carries the stage and timeline
+    columns) — so a page that loads the row anyway doesn't pay for a second
+    round-trip to Monday just to draw the progress timeline."""
+    if not row:
+        return None
+    stage_label = (row.get('color_mm32c8wh') or '').strip()
+    step_def    = _parse_step(stage_label)
+    timeline    = row.get('timeline_mkmbcabh') or ''
+    opened_date = timeline.split(' - ')[0].strip() if ' - ' in timeline else None
+    return {
+        'item_id':       str(row.get('id', '')),
+        'step':          step_def['step'],
+        'step_title':    step_def['title'],
+        'step_subtitle': step_def['subtitle'],
+        'is_sensitive':  step_def['sensitive'],
+        'stage_label':   stage_label,
+        'opened_date':   opened_date,
+        'total_steps':   8,
+    }
+
+
 def fetch_case_status(item_id: str) -> dict | None:
     query = """
     {

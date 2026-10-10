@@ -1,4 +1,4 @@
-import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState } from './caseJourneySteps';
+import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState, type CaseStepDef } from './caseJourneySteps';
 import './journey.css';
 
 const RADIUS = 74;
@@ -54,26 +54,38 @@ export default function CaseJourney({ step, total, sensitive, showHero = true, n
 
       <h3 className="journey-section-title">Every step, in order</h3>
 
-      <div className="journey-timeline">
-        {steps.map((s, idx) => {
-          const state = journeyStepState(s, current);
-          return (
-            <div key={s.step}>
-              {idx > 0 && <div className={`journey-connector journey-connector--${s.step <= current ? 'filled' : 'empty'}`} />}
-              <div className={`journey-step ${state}`}>
-                <div className="journey-step-node">
-                  {state === 'complete' ? '✓' : state === 'active' ? s.icon : s.step}
-                </div>
-                <div className="journey-step-body">
-                  <div className="journey-step-title">{s.title}</div>
-                  <div className="journey-step-subtitle">{s.subtitle}</div>
-                  {state === 'active' && <span className="journey-step-pill">Happening now</span>}
-                </div>
+      <JourneyTimeline steps={steps} current={current} />
+    </div>
+  );
+}
+
+// Every step in order, with the current one highlighted. Shared by the full
+// family view above and the caller's compact progress card.
+export function JourneyTimeline({ steps, current, className = '' }: {
+  steps: CaseStepDef[];
+  current: number;
+  className?: string;
+}) {
+  return (
+    <div className={`journey-timeline ${className}`.trim()}>
+      {steps.map((s, idx) => {
+        const state = journeyStepState(s, current);
+        return (
+          <div key={s.step}>
+            {idx > 0 && <div className={`journey-connector journey-connector--${s.step <= current ? 'filled' : 'empty'}`} />}
+            <div className={`journey-step ${state}`}>
+              <div className="journey-step-node">
+                {state === 'complete' ? '✓' : state === 'active' ? s.icon : s.step}
+              </div>
+              <div className="journey-step-body">
+                <div className="journey-step-title">{s.title}</div>
+                <div className="journey-step-subtitle">{s.subtitle}</div>
+                {state === 'active' && <span className="journey-step-pill">Happening now</span>}
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

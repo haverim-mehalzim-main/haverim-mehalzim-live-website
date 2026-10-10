@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import CaseJourney from '../../components/CaseJourney';
 import CaseCompletion from '../../components/CaseCompletion';
+import CaseProgressSummary from '../../components/CaseProgressSummary';
 import './account.css';
 import './people.css';
 import { StaffShell } from '../staff/StaffShell';
@@ -257,7 +258,7 @@ function StaffTaskManager({ incidentId, tasks, canManage, onTasksChange }: {
 
   return (
     <div className="account-card">
-      <div className="account-section-title" style={{ marginBottom: 16 }}>Case journey</div>
+      <div className="account-section-title" style={{ marginBottom: 16 }}>To-do list</div>
       {tasks.length === 0 ? (
         <div className="account-empty" style={{ marginBottom: canManage ? 14 : 0 }}>No tasks yet.</div>
       ) : (
@@ -1228,6 +1229,14 @@ export default function IncidentDetailPage() {
           </div>
         )}
 
+        {inc.progress && inc.incident_status_en !== 'Rejected' && (
+          <CaseProgressSummary
+            step={inc.progress.step}
+            total={inc.progress.total_steps}
+            sensitive={inc.progress.is_sensitive}
+          />
+        )}
+
         <div className="account-card">
           <div className="account-incident-top">
             <div className="account-incident-type">{inc.incident_type || 'Case'}</div>
@@ -1275,7 +1284,7 @@ export default function IncidentDetailPage() {
         </div>
 
         <div className="account-card">
-          <div className="account-section-title" style={{ marginBottom: 16 }}>Case journey</div>
+          <div className="account-section-title" style={{ marginBottom: 16 }}>To-do list</div>
           <div className="account-task-columns">
             <TaskList title="Things you need to do" tasks={userTasks} />
             <TaskList title="What Haverim Mehalzim is doing" tasks={staffTasks} />

@@ -167,3 +167,45 @@
 @media (max-width: 420px) {
   .journey-hero-title { font-size: 28px; }
 }
+
+/* ── Compact progress card (the caller's own case page) ─────────────────────
+   Same tokens and step list as the family view above, at a size that sits
+   among the page's other cards: ring + current step + slim bar, with the full
+   timeline behind a toggle. */
+
+.journey-compact { padding: 22px 24px 16px; }
+.jc-head { display: flex; align-items: center; gap: 18px; }
+.jc-ring { position: relative; flex: none; width: 64px; height: 64px; }
+.jc-ring svg { display: block; width: 64px; height: 64px; transform: rotate(-90deg); }
+.jc-ring-track { fill: none; stroke: var(--tr-border); stroke-width: 6; }
+.jc-ring-fill { fill: none; stroke-width: 6; stroke-linecap: round; }
+.jc-ring-num { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--tr-serif); font-size: 24px; font-weight: 500; line-height: 1; color: var(--tr-text); }
+.jc-text { min-width: 0; }
+.jc-eyebrow { font-size: 12.5px; font-weight: 500; color: var(--tr-accent); margin-bottom: 2px; }
+.jc-title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--tr-text); }
+.jc-sub { margin: 3px 0 0; font-size: 14px; line-height: 1.45; color: var(--tr-text-dim); }
+
+.jc-bar { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 18px; }
+.jc-seg { height: 6px; border-radius: 3px; background: var(--tr-border); }
+.jc-seg.complete { background: var(--tr-ring-a); }
+.jc-seg.active { background: var(--tr-accent); box-shadow: 0 0 0 3px var(--tr-accent-soft); }
+
+.jc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.jc-count { font-size: 13px; color: var(--tr-text-dim); }
+.jc-toggle {
+  appearance: none; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--tr-accent); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 6px; margin: -8px -6px; border-radius: 8px;
+}
+.jc-toggle:hover { text-decoration: underline; }
+.jc-toggle:focus-visible { outline: 2px solid var(--tr-accent); outline-offset: 2px; }
+.jc-chev { transition: transform 0.2s ease; }
+.jc-chev--open { transform: rotate(180deg); }
+.jc-list { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--tr-border); }
+
+@media (max-width: 480px) {
+  .journey-compact { padding: 18px 18px 14px; }
+  .jc-head { gap: 14px; }
+  .jc-title { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) { .jc-chev { transition: none; } }
