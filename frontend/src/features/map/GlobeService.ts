@@ -62,6 +62,14 @@ function translateType(raw: string): string {
 const LIVE_STATUSES    = new Set(['Live', 'Active', 'Working on it']);
 const HANDLED_STATUSES = new Set(['Done', 'Completed']);
 
+/**
+ * Only approved incidents are plotted: Live (an admin approved it) or Handled
+ * (closed). "New Request by User", "Rejected" and an empty status are not.
+ * /api/incidents already filters the same way (MAP_VISIBLE_STATUSES); this is
+ * the second check, so the map stays right even if the API is ever loosened.
+ */
+const isMapVisible = (status: string) => LIVE_STATUSES.has(status) || HANDLED_STATUSES.has(status);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Processing
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,6 +93,9 @@ function processIncidents(raw: RawIncident[]): GlobeIncident[] {
   let coordMisses = 0;
 
   raw.forEach((inc, i) => {
+    const status = inc.status_mkmbjwef?.trim() ?? '';
+    if (!isMapVisible(status)) return;
+
     const coords = getCoordinates(inc.location_mkmbv7be, inc.country_mkmb91h3, inc.country_code);
 
     if (!coords) {
@@ -92,7 +103,6 @@ function processIncidents(raw: RawIncident[]): GlobeIncident[] {
       return;
     }
 
-    const status   = inc.status_mkmbjwef?.trim() ?? '';
     const isLive     = LIVE_STATUSES.has(status);
     const isResolved = HANDLED_STATUSES.has(status);
 

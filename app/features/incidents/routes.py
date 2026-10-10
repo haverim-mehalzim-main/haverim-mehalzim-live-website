@@ -37,6 +37,7 @@ from app.features.incidents.constants import (
     GROUP_OPENED,
     INCIDENT_HANDLED_BY_RON,
     SIGNIFICANT_INCIDENT,
+    MAP_VISIBLE_STATUSES,
     ACTIVE_VOLUNTEERS_COUNT,
     PREMIUM_PRICE_USD,
     PREMIUM_PLAN_DEFAULT,
@@ -199,15 +200,20 @@ def get_dashboard_data():
 
 @incidents_bp.route('/api/incidents')
 def get_incidents():
+    """The public map's data. Only incidents an admin has approved (or that are
+    already done) are returned: this endpoint is unauthenticated, so filtering
+    here — not just in the map's frontend — is what keeps a still-unreviewed
+    request, or a rejected one, from being readable by anyone who calls it."""
     incidents = fetch_monday_data()
     if incidents is None:
         return jsonify({'success': False, 'message': 'Failed to fetch incidents', 'data': []}), 500
 
+    visible = [r for r in incidents if (r.get('status_mkmbjwef') or '').strip() in MAP_VISIBLE_STATUSES]
     return jsonify({
         'success': True,
-        'data': incidents,
+        'data': visible,
         'count_received': len(incidents),
-        'count_displayed': len(incidents),
+        'count_displayed': len(visible),
     }), 200
 
 
@@ -1687,7 +1693,13 @@ def approve_monday_incident(monday_item_id):
     if _staff_role_check(admin_only=True) is None:
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
 
-    ok, warnings = update_incident(item_id=monday_item_id, fields={'incident_status': 'Working on it'})
+    # Both Monday columns, like reject: status -> Working on it, and the case
+    # status (color_mkvvrm1r, the one the dashboard's "handled" count reads) ->
+    # "נפתח אירוע" — approving is the human decision that a case was opened.
+    ok, warnings = update_incident(
+        item_id=monday_item_id,
+        fields={'incident_status': 'Working on it', 'status_label': 'Case Opened'},
+    )
     if not ok:
         return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
 
@@ -1695,6 +1707,7 @@ def approve_monday_incident(monday_item_id):
     # urgency, and set the status we just wrote so a lagging read can't hide it.
     row = (fetch_incidents_by_ids([monday_item_id]) or [{'id': monday_item_id}])[0]
     row['status_mkmbjwef'] = 'Working on it'
+    row['color_mkvvrm1r'] = GROUP_OPENED
     incident_service.sync_local_incidents_from_monday([row])
     db.session.commit()
     return jsonify({'success': True, 'warnings': warnings}), 200

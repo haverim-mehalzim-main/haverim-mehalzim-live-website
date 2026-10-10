@@ -20,10 +20,18 @@ STATUS_TRANSLATIONS = {
 MAP_LIVE_STATUSES     = {'Live', 'Active', 'Working on it'}
 MAP_HANDLED_STATUSES  = {'Done', 'Completed'}
 
-# status_mkmbjwef value set on a freshly self-service-opened incident (see
-# create_incident in service.py). Deliberately outside both sets above — an
-# unreviewed incident must not show on the live map or count as handled until
-# staff have actually looked at it and set a real status themselves.
+# Statuses an incident may have to appear on the public map at all: an admin has
+# approved it (Working on it) or it has since been closed (Done). Anything else —
+# New Request by User (not yet approved), Rejected, or no status — stays off the
+# map. A positive list rather than "not New Request", so a status added to the
+# board later is hidden until someone decides it belongs on the map.
+MAP_VISIBLE_STATUSES  = MAP_LIVE_STATUSES | MAP_HANDLED_STATUSES
+
+# status_mkmbjwef value set on a freshly opened incident, whether through the
+# app (see create_incident in service.py) or by the WhatsApp agent's intake.
+# Deliberately outside both sets above — an unreviewed incident must not show on
+# the map or count as handled until an admin approves it (which moves it to
+# "Working on it" and sets the case status to "נפתח אירוע").
 NEW_REQUEST_STATUS = "New Request by User"
 
 # status_mkmb1zc6 Hebrew → English translations
