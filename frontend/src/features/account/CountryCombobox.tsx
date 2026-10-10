@@ -8,7 +8,7 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 // (or Tab) takes the highlighted match. Still works as a plain dropdown too —
 // click or press the down arrow to see every country. `value` is the country
 // code, exactly like the <select> this replaces.
-export function CountryCombobox({ id, value, onChange, countries, placeholder = 'Type or select a country' }: {
+export function CountryCombobox({ id, value, onChange, countries, placeholder = 'Type or select' }: {
   id: string;
   value: string;
   onChange: (code: string) => void;
