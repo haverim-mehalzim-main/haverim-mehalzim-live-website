@@ -12,6 +12,7 @@ interface IncidentSummary {
   opened_date: string | null;
   life_threatening: boolean;
   handled: boolean;
+  declined?: boolean;
   relation: 'owner' | 'follower';
 }
 
@@ -31,7 +32,7 @@ function IncidentCard({ incident, ongoing }: { incident: IncidentSummary; ongoin
         <div className="account-incident-type">{incident.incident_type || 'Case'}</div>
         <div>
           <span className={`account-incident-badge ${ongoing ? 'account-incident-badge--ongoing' : 'account-incident-badge--past'}`}>
-            {ongoing ? 'Ongoing' : 'Resolved'}
+            {ongoing ? 'Ongoing' : incident.declined ? 'Declined' : 'Resolved'}
           </span>
           {incident.life_threatening && <span className="account-incident-badge account-incident-badge--urgent">Urgent</span>}
           {incident.relation === 'follower' ? (

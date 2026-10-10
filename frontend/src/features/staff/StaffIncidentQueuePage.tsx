@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { StaffGate, StaffShell } from './StaffShell';
+import { MarkDoneButton } from './MarkDoneButton';
 import { useStaffData } from './useStaffData';
 
 interface QueueIncident {
@@ -31,8 +33,8 @@ function RejectForm({ onConfirm, onCancel, busy }: {
   );
 }
 
-function QueueRow({ incident, triage, onDecided }: {
-  incident: QueueIncident; triage: boolean; onDecided: (mondayItemId: string) => void;
+function QueueRow({ incident, triage, canComplete, onDecided }: {
+  incident: QueueIncident; triage: boolean; canComplete: boolean; onDecided: (mondayItemId: string) => void;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,7 +78,18 @@ function QueueRow({ incident, triage, onDecided }: {
               <button className="staff-btn staff-btn--danger" disabled={busy} onClick={() => setRejecting(true)}>Decline</button>
             </>
           ) : (
-            !triage && <span className="staff-chevron">›</span>
+            !triage && (
+              <>
+                {canComplete && (
+                  <MarkDoneButton
+                    mondayItemId={incident.monday_item_id}
+                    incidentName={incident.name}
+                    onDone={() => onDecided(incident.monday_item_id)}
+                  />
+                )}
+                <span className="staff-chevron">›</span>
+              </>
+            )
           )}
         </div>
       </div>
@@ -93,6 +106,9 @@ function Queue({ status, title, subtitle, triage }: { status: string; title: str
     `/api/staff/incidents-by-status?status=${encodeURIComponent(status)}`,
   );
   const incidents = data?.incidents ?? null;
+  const { user } = useAuth();
+  // Only an admin can close a case, and only one that is in progress.
+  const canComplete = user?.primary_role === 'admin' && !triage && status === 'Working on it';
 
   const handleDecided = (mondayItemId: string) =>
     setData(prev => (prev ? { ...prev, incidents: prev.incidents.filter(i => i.monday_item_id !== mondayItemId) } : prev));
@@ -106,7 +122,7 @@ function Queue({ status, title, subtitle, triage }: { status: string; title: str
           {incidents.length === 0 ? (
             <div className="staff-empty">Nothing here right now.</div>
           ) : (
-            incidents.map(inc => <QueueRow key={inc.monday_item_id} incident={inc} triage={triage} onDecided={handleDecided} />)
+            incidents.map(inc => <QueueRow key={inc.monday_item_id} incident={inc} triage={triage} canComplete={canComplete} onDecided={handleDecided} />)
           )}
         </div>
       )}

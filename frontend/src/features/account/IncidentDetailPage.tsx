@@ -7,6 +7,7 @@ import CaseProgressSummary from '../../components/CaseProgressSummary';
 import './account.css';
 import './people.css';
 import { StaffShell } from '../staff/StaffShell';
+import { MarkDoneButton } from '../staff/MarkDoneButton';
 
 interface IncidentDetail {
   id: number;
@@ -19,6 +20,7 @@ interface IncidentDetail {
   status_label?: string;
   status_label_en?: string;
   handled: boolean;
+  declined?: boolean;
   found_on_monday?: boolean;
   patient_name: string;
   patient_age?: string;
@@ -1069,7 +1071,7 @@ export default function IncidentDetailPage() {
             <h1 className="family-title">{inc.patient_name || 'this case'}</h1>
             <div className="family-meta">
               {inc.location}{inc.opened_date ? ` · since ${inc.opened_date}` : ''}
-              <span className={`family-status${inc.handled ? ' family-status--done' : ''}`}>{inc.handled ? 'Resolved' : 'Ongoing'}</span>
+              <span className={`family-status${inc.handled ? ' family-status--done' : ''}`}>{inc.declined ? 'Closed' : inc.handled ? 'Resolved' : 'Ongoing'}</span>
             </div>
           </div>
 
@@ -1137,7 +1139,19 @@ export default function IncidentDetailPage() {
       <StaffShell
         title={inc.patient_name || inc.incident_type || 'Incident'}
         subtitle={[inc.incident_type, inc.location, inc.opened_date ? `opened ${inc.opened_date}` : ''].filter(Boolean).join(' · ')}
-        actions={<Link to={backLink} className="staff-btn">Back to dashboard</Link>}
+        actions={
+          <div className="staff-head-actions">
+            {relation === 'admin' && inc.monday_item_id && inc.incident_status_en === 'Working on it' && (
+              <MarkDoneButton
+                mondayItemId={inc.monday_item_id}
+                incidentName={inc.patient_name}
+                className="staff-btn staff-btn--primary"
+                onDone={() => loadIncident({ silent: true })}
+              />
+            )}
+            <Link to={backLink} className="staff-btn">Back to dashboard</Link>
+          </div>
+        }
       >
         <div className="staff-incident-grid">
           <div className="staff-incident-main">
@@ -1242,7 +1256,7 @@ export default function IncidentDetailPage() {
             <div className="account-incident-type">{inc.incident_type || 'Case'}</div>
             <div>
               <span className={`account-incident-badge ${inc.handled ? 'account-incident-badge--past' : 'account-incident-badge--ongoing'}`}>
-                {inc.handled ? 'Resolved' : 'Ongoing'}
+                {inc.declined ? 'Declined' : inc.handled ? 'Resolved' : 'Ongoing'}
               </span>
               {inc.life_threatening && <span className="account-incident-badge account-incident-badge--urgent">Urgent</span>}
             </div>

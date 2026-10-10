@@ -72,6 +72,15 @@ incidents_bp = Blueprint('incidents', __name__)
 
 HANDLED_STATUSES = {GROUP_OPENED, INCIDENT_HANDLED_BY_RON, SIGNIFICANT_INCIDENT}
 
+# HANDLED_STATUSES above reads Monday's legacy "case status" column, where
+# "Case Opened" means "someone decided to open this case" — right for the
+# public dashboard's handled counts, wrong for "is this case still going?"
+# (approving a request writes "Case Opened", so every in-progress case counted
+# as handled). The caller-facing Ongoing / Past split and the Resolved badge
+# follow the workflow status instead: a case is closed once it is Done or was
+# Rejected (declined).
+_CLOSED_INCIDENT_STATUSES = {'Done', 'Rejected'}
+
 # ── Admin auth ────────────────────────────────────────────────────────────────
 import hmac, hashlib, time as _time
 from collections import defaultdict
@@ -744,7 +753,8 @@ def _serialize_incident(local_incident: Incident, monday_row: dict | None) -> di
         # dropdown to pre-select the current value — status_label itself
         # stays the raw Hebrew text everywhere else, unchanged.
         'status_label_en': STATUS_TRANSLATIONS.get(status_label, ''),
-        'handled': status_label in HANDLED_STATUSES,
+        'handled': incident_status in _CLOSED_INCIDENT_STATUSES,
+        'declined': incident_status == 'Rejected',
         'found_on_monday': monday_row is not None,
         'created_at': local_incident.created_at.isoformat(),
 
@@ -818,7 +828,8 @@ def _serialize_monday_only_incident(row: dict) -> dict:
         'life_threatening': bool(row.get('check_mkn3c7v8')),
         'status_label': status_label,
         'status_label_en': STATUS_TRANSLATIONS.get(status_label, ''),
-        'handled': status_label in HANDLED_STATUSES,
+        'handled': incident_status in _CLOSED_INCIDENT_STATUSES,
+        'declined': incident_status == 'Rejected',
         'found_on_monday': True,
 
         'incident_status': incident_status,
@@ -865,7 +876,7 @@ def _serialize_task(task: IncidentTask) -> dict:
 # decides it belongs here, not silently exposed.
 _MACRO_INCIDENT_FIELDS = {
     'id', 'monday_item_id', 'incident_type', 'city', 'country', 'location',
-    'patient_name', 'life_threatening', 'opened_date', 'handled', 'created_at',
+    'patient_name', 'life_threatening', 'opened_date', 'handled', 'declined', 'created_at',
 }
 
 
@@ -1712,6 +1723,38 @@ def approve_monday_incident(monday_item_id):
     row = (fetch_incidents_by_ids([monday_item_id]) or [{'id': monday_item_id}])[0]
     row['status_mkmbjwef'] = 'Working on it'
     row['color_mkvvrm1r'] = GROUP_OPENED
+    incident_service.sync_local_incidents_from_monday([row])
+    db.session.commit()
+    return jsonify({'success': True, 'warnings': warnings}), 200
+
+
+@incidents_bp.route('/api/staff/monday-incidents/<monday_item_id>/complete', methods=['POST'])
+def complete_monday_incident(monday_item_id):
+    """Close an in-progress case: status -> Done and Case Stage -> 8. Support
+    & Next Steps, written to Monday in one call (all-or-nothing, like every
+    other label edit). The caller then sees it under Past cases as Resolved
+    and a family member's timeline reads 8 of 8. Only a case that is
+    currently Working on it can be completed — a New Request is decided with
+    Approve / Decline instead."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    rows = fetch_incidents_by_ids([monday_item_id])
+    if not rows:
+        return jsonify({'success': False, 'message': 'This incident was not found on Monday.com.'}), 404
+    row = rows[0]
+    if (row.get('status_mkmbjwef') or '').strip() != 'Working on it':
+        return jsonify({'success': False, 'message': 'Only an incident that is in progress can be marked as done.'}), 409
+
+    ok, warnings = update_incident(
+        item_id=monday_item_id,
+        fields={'incident_status': 'Done', 'case_stage': '8. Support & Next Steps'},
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': 'Could not update Monday.com. Please try again shortly.'}), 502
+
+    row['status_mkmbjwef'] = 'Done'
+    row['color_mm32c8wh'] = '8. Support & Next Steps'
     incident_service.sync_local_incidents_from_monday([row])
     db.session.commit()
     return jsonify({'success': True, 'warnings': warnings}), 200
