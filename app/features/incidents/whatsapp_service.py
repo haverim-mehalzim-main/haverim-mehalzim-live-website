@@ -6,9 +6,10 @@ Two routes, one report:
   - the incident-management agent (agent_service) — preferred when configured.
     It posts to the team's WhatsApp group as a normal message, so the report
     gets the full, spacious layout (build_rich_report);
-  - WhatSable's send API — the original route, kept as the fallback if the
-    agent can't be reached. It sends through pre-made templates (see the note
-    on the compact report below), hence its own, tighter layout.
+  - WhatSable's send API — the original route, kept as the fallback when the
+    agent can't be reached, refuses the report, or took it but says its own
+    WhatsApp is down (see agent_service). It sends through pre-made templates
+    (see the note on the compact report below), hence its own, tighter layout.
 
 Best-effort by design (same stance as email_service): the call is already
 saved on Monday and in our DB by the time this runs, so a WhatsApp failure is
@@ -29,12 +30,13 @@ full text is one tap away on the incident page.
 
 import re
 import threading
+import time
 from datetime import datetime, timezone
 
 import requests
 
-from app.config import PUBLIC_BASE_URL, WHATSABLE_API_KEY, WHATSAPP_BUSINESS_NUMBER, WHATSABLE_SEND_URL
-from app.features.incidents import agent_service
+from app.config import PUBLIC_BASE_URL, REPORT_ALERT_EMAIL, WHATSABLE_API_KEY, WHATSAPP_BUSINESS_NUMBER, WHATSABLE_SEND_URL
+from app.features.incidents import agent_service, email_service
 from app.features.incidents.constants import GENDER_TRANSLATIONS, INCIDENT_TYPE_TRANSLATIONS
 
 try:
@@ -336,15 +338,55 @@ def send_message(text: str) -> bool:
     return False
 
 
+# At most one "the backup was used" email per this window, so an agent that is
+# down all night doesn't send one email per incident. An email about a report
+# that reached NOBODY is never held back.
+_ALERT_COOLDOWN_SECONDS = 30 * 60
+_alert_lock = threading.Lock()
+_last_alert_at = 0.0
+
+
+def _alert_admin(agent_payload: dict, reason: str, backup_sent) -> None:
+    """Email REPORT_ALERT_EMAIL that the agent did not deliver this report.
+    Best-effort: never raises, never delays the report (it runs after the
+    WhatSable attempt)."""
+    global _last_alert_at
+    if not REPORT_ALERT_EMAIL:
+        return
+    try:
+        with _alert_lock:
+            now = time.monotonic()
+            if backup_sent is True and _last_alert_at and now - _last_alert_at < _ALERT_COOLDOWN_SECONDS:
+                print(f"[whatsapp] agent failure ({reason}) — admin already emailed in the last {_ALERT_COOLDOWN_SECONDS // 60} min")
+                return
+            _last_alert_at = now
+        email_service.send_report_backup_alert(
+            REPORT_ALERT_EMAIL,
+            reason=reason,
+            backup_sent=backup_sent,
+            incident_url=agent_payload.get("incident_url", ""),
+            incident_id=agent_payload.get("incident_id"),
+            monday_item_id=agent_payload.get("monday_item_id", ""),
+        )
+    except Exception as e:
+        print(f"[whatsapp] could not send the admin alert: {e}")
+
+
 def _deliver(agent_payload: dict | None, compact_text: str | None) -> None:
-    """The agent first; WhatSable only if the agent did not take the report (or
-    isn't configured). Runs on the background thread."""
+    """The agent first; WhatSable whenever the agent did not get the report to
+    the group (down, refused it, or took it but its WhatsApp could not send — see
+    agent_service.send_report) or isn't configured. When the agent failed, the
+    admin is also told, after the WhatSable attempt. Runs on the background thread."""
     if agent_payload is not None:
-        if agent_service.send_report(agent_payload):
+        delivered, reason = agent_service.send_report(agent_payload)
+        if delivered:
             return
-        print("[whatsapp] agent did not take the report" + (" — falling back to WhatSable" if compact_text else " and no fallback is configured"))
-    if compact_text is not None:
-        send_message(compact_text)
+        print(f"[whatsapp] the agent did not deliver the report ({reason})" + (" — sending it via WhatSable" if compact_text else " and no WhatSable fallback is configured (the agent will send it when it can)"))
+    else:
+        reason = ""
+    backup_sent = send_message(compact_text) if compact_text is not None else None
+    if agent_payload is not None:
+        _alert_admin(agent_payload, reason, backup_sent)
 
 
 def send_incident_report_in_background(**report_fields) -> None:

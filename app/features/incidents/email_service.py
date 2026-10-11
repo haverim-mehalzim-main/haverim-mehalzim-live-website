@@ -635,3 +635,122 @@ def send_new_case_alert(
     except Exception as e:
         print(f"[email_service] new-case alert failed: {e}")
         return False
+
+
+# What an admin reads for each reason code the agent / agent_service reports.
+_REPORT_FAILURE_REASONS = {
+    "agent_unreachable":     "The agent could not be reached (it may be down or restarting).",
+    "agent_not_configured":  "The agent is not configured on the website.",
+    "whatsapp_disconnected": "The agent is running but its WhatsApp is disconnected.",
+    "send_failed":           "The agent's WhatsApp library threw an error while sending (often an outdated whatsapp-web.js after a WhatsApp Web update).",
+    "send_timeout":          "The agent's WhatsApp send hung and was cut off (the browser behind it may be stuck).",
+    "not_sent_in_time":      "The agent did not finish sending in time.",
+}
+
+
+def _describe_report_failure(reason: str) -> str:
+    if reason in _REPORT_FAILURE_REASONS:
+        return _REPORT_FAILURE_REASONS[reason]
+    if reason.startswith("agent_refused_"):
+        return f"The agent refused the report (HTTP {reason.rsplit('_', 1)[-1]}) — check that AGENT_API_SECRET matches on both sides."
+    if reason.startswith("agent_error_"):
+        return f"The agent kept answering with an error (HTTP {reason.rsplit('_', 1)[-1]})."
+    return f"The agent did not send the report ({reason})."
+
+
+def send_report_backup_alert(
+    to_email: str,
+    *,
+    reason: str,
+    backup_sent: bool | None,
+    incident_url: str = "",
+    incident_id=None,
+    monday_item_id: str = "",
+) -> bool:
+    """Tell an admin that a new-incident report did not go out through the
+    WhatsApp agent. backup_sent: True = WhatSable sent it instead, False =
+    WhatSable failed too (nobody got the report), None = no backup configured.
+    Carries NO personal details — just the incident link and ids. Best-effort:
+    never raises, returns True/False."""
+    if not is_configured():
+        print("[email_service] BREVO_API_KEY / sender / PUBLIC_BASE_URL not set — skipping report-backup alert")
+        return False
+    if not to_email:
+        return False
+
+    what = html.escape(_describe_report_failure(reason))
+    if backup_sent is True:
+        critical = False
+        headline = "The WhatsApp agent couldn't send an incident report — WhatSable backup was used"
+        status = ("The team did get the report through the WhatSable backup. When the agent catches up it may "
+                  "send its own copy, marked “sent late” — that's expected.")
+        subject = "⚠️ WhatsApp agent couldn't send an incident report — backup used"
+    else:
+        critical = True
+        headline = "NO WhatsApp copy of an incident report has reached the team"
+        status = ("The WhatSable backup failed too." if backup_sent is False else "No WhatSable backup is configured.") + \
+                 " The report is waiting in the agent's outbox and will go out when it recovers — open the incident and tell the team now."
+        subject = "🚨 An incident report was NOT sent to WhatsApp — act now"
+
+    ids = " · ".join(p for p in (f"incident #{incident_id}" if incident_id else "", f"Monday item {monday_item_id}" if monday_item_id else "") if p)
+    link_html = f'<p style="margin:0 0 16px;">{_button(incident_url, "Open the incident →", critical)}</p>' if incident_url else ""
+    banner = (
+        '<tr><td style="background:#b91c1c;padding:12px 28px;color:#ffffff;font-size:14px;font-weight:700;">'
+        '🚨 ACTION NEEDED</td></tr>' if critical else ""
+    )
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden;
+                    font-family:'Segoe UI',Arial,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.06);">
+        {banner}
+        <tr><td style="padding:28px;">
+          <h1 style="margin:0 0 14px;font-size:19px;color:#0f172a;">{html.escape(headline)}</h1>
+          <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#1f2937;"><strong>What happened:</strong> {what}</p>
+          <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#1f2937;">{html.escape(status)}</p>
+          {f'<p style="margin:0 0 14px;font-size:13px;color:#6b7280;">{html.escape(ids)}</p>' if ids else ''}
+          {link_html}
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+            To fix it: check the agent's logs on Railway, and if the WhatsApp library is the cause, update
+            whatsapp-web.js or the pinned WWEB_VERSION and redeploy the agent.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    text_body = "\n".join(filter(None, [
+        headline, "",
+        f"What happened: {_describe_report_failure(reason)}", status,
+        ids, incident_url, "",
+        "To fix it: check the agent's logs on Railway; if the WhatsApp library is the cause, update whatsapp-web.js or the pinned WWEB_VERSION and redeploy the agent.",
+    ]))
+
+    payload = {
+        "sender":      {"name": EMAIL_SENDER_NAME, "email": EMAIL_SENDER_ADDRESS},
+        "to":          [{"email": to_email}],
+        "replyTo":     {"email": EMAIL_REPLY_TO, "name": EMAIL_SENDER_NAME},
+        "subject":     subject,
+        "htmlContent": html_body,
+        "textContent": text_body,
+        "tags":        ["report-backup-alert", "critical" if critical else "backup-used"],
+    }
+    headers = {"api-key": BREVO_API_KEY, "content-type": "application/json", "accept": "application/json"}
+
+    try:
+        resp = requests.post(_BREVO_URL, json=payload, headers=headers, timeout=15)
+        if resp.status_code // 100 == 2:
+            print(f"[email_service] report-backup alert sent to {to_email}")
+            return True
+        print(f"[email_service] Brevo error {resp.status_code}: {resp.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"[email_service] report-backup alert failed: {e}")
+        return False

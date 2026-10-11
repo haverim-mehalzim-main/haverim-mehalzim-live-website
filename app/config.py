@@ -113,6 +113,11 @@ WHATSABLE_SEND_URL   = os.getenv("WHATSABLE_SEND_URL", "https://dashboard.whatsa
 AGENT_BASE_URL   = (os.getenv("AGENT_BASE_URL") or "").strip().rstrip("/")
 AGENT_API_SECRET = (os.getenv("AGENT_API_SECRET") or "").strip()
 
+# Who is emailed when the agent could not send a new-incident report and the
+# WhatSable backup had to step in (or nothing could be sent at all). One address;
+# unset = no email. The report itself is never affected by this.
+REPORT_ALERT_EMAIL = (os.getenv("REPORT_ALERT_EMAIL") or "").strip()
+
 # The agent's own WhatsApp number (the account it is linked to), for the command
 # center's "Report a call" button: it opens a chat with that number and a ready
 # first message that starts an intake. Any format works (+972..., 050-...);

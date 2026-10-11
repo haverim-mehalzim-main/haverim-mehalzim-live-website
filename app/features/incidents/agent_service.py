@@ -7,8 +7,15 @@ POST <AGENT_BASE_URL>/api/incident-report with AGENT_API_SECRET as a Bearer toke
 whether the agent took it.
 
 Delivery contract (the agent's side is src/reports/gateway.js in its repo):
-  200  accepted, or already had it — the agent keeps it until WhatsApp is
-       connected, so a 200 means "will be delivered", not "was delivered"
+  200  accepted, or already had it. The agent tries to send the report to the
+       group BEFORE it answers (waiting up to ~7s), and says what happened:
+       {"accepted": true, "sent": false, "reason": "send_failed", ...}. sent=false
+       means the report is safe in the agent's outbox but did NOT reach the team
+       (its WhatsApp is disconnected, the wweb.js library threw, the send hung):
+       send_report() then answers False and the WhatSable fallback sends it too.
+       The cost is a second copy when the agent catches up (marked "sent late");
+       a report that waits is worse. An older agent without the `sent` field is
+       judged by `whatsapp_connected` if it has that, else treated as delivered.
   401  the secret is wrong        } a configuration problem: retrying can't help,
   400  not a report it understands} so give up at once and let the caller fall back
   5xx / no answer                 retry a couple of times with a growing pause
@@ -63,13 +70,15 @@ def is_configured() -> bool:
     return True
 
 
-def _post(path: str, payload: dict, *, pauses: tuple, what: str) -> bool:
-    """POST `payload` to the agent. True once it answered 200. `pauses` are the waits
+def _post_response(path: str, payload: dict, *, pauses: tuple, what: str):
+    """POST `payload` to the agent. Returns (response, why): the 200 response and
+    "" once it answered, else (None, a short reason code). `pauses` are the waits
     before each retry (empty = a single attempt)."""
     if not is_configured():
-        return False
+        return None, "agent_not_configured"
 
     attempts = len(pauses) + 1
+    why = "agent_unreachable"
     for attempt, pause in enumerate((0, *pauses), start=1):
         if pause:
             time.sleep(pause)
@@ -82,22 +91,48 @@ def _post(path: str, payload: dict, *, pauses: tuple, what: str) -> bool:
             )
         except requests.RequestException as e:
             print(f"[agent] {what}: attempt {attempt}/{attempts} failed: {e.__class__.__name__}")
+            why = "agent_unreachable"
             continue
 
         if resp.status_code == 200:
-            return True
+            return resp, ""
         if resp.status_code < 500:
             print(f"[agent] {what} refused: HTTP {resp.status_code} (check AGENT_API_SECRET matches the agent's)")
-            return False
+            return None, f"agent_refused_{resp.status_code}"
         print(f"[agent] {what}: attempt {attempt}/{attempts}: HTTP {resp.status_code}")
+        why = f"agent_error_{resp.status_code}"
 
     print(f"[agent] gave up — the agent did not accept the {what}")
-    return False
+    return None, why
 
 
-def send_report(payload: dict) -> bool:
-    """POST a new-incident report to the agent. True once the agent accepted it."""
-    return _post(_REPORT_PATH, payload, pauses=_RETRY_PAUSES, what="report")
+def _post(path: str, payload: dict, *, pauses: tuple, what: str) -> bool:
+    """True once the agent answered 200."""
+    return _post_response(path, payload, pauses=pauses, what=what)[0] is not None
+
+
+def send_report(payload: dict) -> tuple[bool, str]:
+    """POST a new-incident report to the agent. Returns (delivered, reason).
+    delivered is True only when the agent took it AND got it to the group; on
+    False the caller should use the fallback, and `reason` is a short code saying
+    why (agent_unreachable, agent_refused_401, whatsapp_disconnected,
+    send_failed, send_timeout, ...)."""
+    resp, why = _post_response(_REPORT_PATH, payload, pauses=_RETRY_PAUSES, what="report")
+    if resp is None:
+        return False, why
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        if body.get("sent") is False:
+            reason = str(body.get("reason") or "not_sent")[:60]
+            print(f"[agent] took the report but did not send it to WhatsApp ({reason}) — it will go out late from the agent")
+            return False, reason
+        if "sent" not in body and body.get("whatsapp_connected") is False:
+            print("[agent] took the report, but its WhatsApp is disconnected — it will go out late from the agent")
+            return False, "whatsapp_disconnected"
+    return True, ""
 
 
 def push_officers(officers: list, *, retry: bool = True) -> bool:
