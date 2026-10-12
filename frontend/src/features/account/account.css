@@ -70,21 +70,6 @@
   color: var(--accent-teal);
 }
 
-.account-open-call-btn {
-  padding: 8px 16px;
-  background: var(--accent-teal);
-  color: var(--bg-void);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.account-open-call-btn:hover { opacity: 0.9; }
-
 .account-empty {
   padding: 20px;
   text-align: center;

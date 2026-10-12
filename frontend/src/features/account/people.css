@@ -118,9 +118,32 @@
   background: transparent; color: var(--text-secondary); border: 1px solid var(--border-mid);
 }
 .auth-page .auth-submit--secondary:hover:not(:disabled) { background: var(--bg-surface); opacity: 1; }
-.auth-page .account-open-call-btn,
-.account-page .account-open-call-btn {
-  padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #ffffff; background: var(--accent-teal);
+/* Account actions: "Open a call" is the one large primary action, with the quieter
+   Log out beside it. 60px tall (well over the 44px touch minimum) and 18px text so it
+   is easy to hit on a phone in a hard moment; on narrow screens the two stack, the
+   primary first, each full width. */
+.auth-page .account-actions { display: flex; gap: 12px; align-items: stretch; margin-top: 24px; }
+.auth-page .account-open-call-primary {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 12px;
+  min-height: 60px; padding: 14px 24px; border-radius: 16px;
+  background: var(--accent-teal); color: #ffffff; text-decoration: none;
+  font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1.2;
+  box-shadow: 0 6px 18px rgba(15, 110, 86, 0.28);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.auth-page .account-open-call-primary:hover { background: #0b5a46; transform: translateY(-1px); box-shadow: 0 8px 22px rgba(15, 110, 86, 0.34); }
+.auth-page .account-open-call-primary:active { transform: none; box-shadow: 0 3px 10px rgba(15, 110, 86, 0.28); }
+.auth-page .account-open-call-primary:focus-visible { outline: 3px solid var(--accent-teal); outline-offset: 3px; }
+.auth-page .account-open-call-icon { font-size: 24px; line-height: 1; }
+.auth-page .account-actions .account-logout-btn { width: auto; flex: 0 0 auto; margin-top: 0; padding: 0 24px; min-height: 60px; font-size: 15px; }
+.auth-page .account-actions .account-logout-btn:focus-visible { outline: 3px solid var(--accent-teal); outline-offset: 3px; }
+@media (max-width: 520px) {
+  .auth-page .account-actions { flex-direction: column; }
+  .auth-page .account-actions .account-logout-btn { width: 100%; min-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-page .account-open-call-primary { transition: none; }
+  .auth-page .account-open-call-primary:hover { transform: none; }
 }
 .auth-page .account-premium-cta,
 .account-page .account-premium-cta { border-radius: 999px; color: #ffffff; background: var(--accent-amber); }

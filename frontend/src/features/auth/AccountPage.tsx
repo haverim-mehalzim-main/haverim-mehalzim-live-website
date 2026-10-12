@@ -163,9 +163,17 @@ export default function AccountPage() {
                   ))}
                 </div>
               )}
-              <button className="auth-submit auth-submit--secondary" onClick={handleLogout}>
-                Log out
-              </button>
+              {/* Opening a call is the most important thing a person does here, so it is the
+                  one large primary action, at the top, beside the quieter Log out. */}
+              <div className="account-actions">
+                <Link to="/account/open-call" className="account-open-call-primary">
+                  <span className="account-open-call-icon" aria-hidden="true">🆘</span>
+                  Open a call
+                </Link>
+                <button className="auth-submit auth-submit--secondary account-logout-btn" onClick={handleLogout}>
+                  Log out
+                </button>
+              </div>
             </div>
 
             {isStaff && (
@@ -211,7 +219,6 @@ export default function AccountPage() {
             <div className="account-section">
               <div className="account-section-header">
                 <div className="account-section-title">Ongoing cases</div>
-                <Link to="/account/open-call" className="account-open-call-btn">🆘 Open a call</Link>
               </div>
               <p className="account-section-caption">
                 📞 marks calls you opened yourself. 💙 marks cases you're following for someone you know.
