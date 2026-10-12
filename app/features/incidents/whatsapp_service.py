@@ -373,10 +373,14 @@ def _alert_admin(agent_payload: dict, reason: str, backup_sent) -> None:
 
 
 def _deliver(agent_payload: dict | None, compact_text: str | None) -> None:
-    """The agent first; WhatSable whenever the agent did not get the report to
-    the group (down, refused it, or took it but its WhatsApp could not send — see
-    agent_service.send_report) or isn't configured. When the agent failed, the
-    admin is also told, after the WhatSable attempt. Runs on the background thread."""
+    """The agent first, with ONE 10s attempt: a healthy agent answers within
+    ~7s, so silence past that means something is wrong and the team shouldn't
+    wait. WhatSable then goes out at once whenever the agent did not get the
+    report to the group (down, refused it, or took it but its WhatsApp could not
+    send — see agent_service.send_report) or isn't configured, and the admin is
+    told. If the agent simply didn't answer, the report is then offered to it
+    again in the background (it dedupes on incident_id): its group is the team's
+    main channel. Runs on the background thread."""
     if agent_payload is not None:
         delivered, reason = agent_service.send_report(agent_payload)
         if delivered:
@@ -385,8 +389,13 @@ def _deliver(agent_payload: dict | None, compact_text: str | None) -> None:
     else:
         reason = ""
     backup_sent = send_message(compact_text) if compact_text is not None else None
-    if agent_payload is not None:
-        _alert_admin(agent_payload, reason, backup_sent)
+    if agent_payload is None:
+        return
+    _alert_admin(agent_payload, reason, backup_sent)
+    if agent_service.is_transient(reason):
+        delivered, _ = agent_service.retry_report(agent_payload)
+        if delivered:
+            print("[whatsapp] the agent took the report on a retry, after the WhatSable backup had gone out")
 
 
 def send_incident_report_in_background(**report_fields) -> None:

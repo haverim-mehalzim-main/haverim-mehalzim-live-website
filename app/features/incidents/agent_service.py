@@ -18,7 +18,10 @@ Delivery contract (the agent's side is src/reports/gateway.js in its repo):
        judged by `whatsapp_connected` if it has that, else treated as delivered.
   401  the secret is wrong        } a configuration problem: retrying can't help,
   400  not a report it understands} so give up at once and let the caller fall back
-  5xx / no answer                 retry a couple of times with a growing pause
+  5xx / no answer                 transient: send_report() makes ONE attempt (10s) and
+                                  reports the failure, so the caller can send its
+                                  backup at once instead of waiting out retries;
+                                  retry_report() then keeps trying in the background
 The agent de-duplicates on incident_id, so a retry after a lost 200 is safe.
 
 Best-effort like the other senders: never raises, returns True/False. It runs
@@ -38,8 +41,11 @@ _TIMEOUT_SECONDS = 10
 _REPORT_PATH = "/api/incident-report"
 # The agent's endpoint for the list of officers allowed to message it.
 _OFFICERS_PATH = "/api/officers"
-# Pause before the 2nd and 3rd attempt. Long enough to ride out an agent
-# redeploy starting up, short enough that the WhatSable fallback isn't far behind.
+# Pauses before the 2nd and 3rd attempt of the BACKGROUND retry (retry_report):
+# the backup has already gone out by then, so these only decide how long the
+# site keeps offering the report to the agent. A healthy agent answers within
+# ~7s, so one 10s attempt is enough to know something is wrong — waiting out
+# retries before the backup (as it used to: up to ~40s) only delays the team.
 _RETRY_PAUSES = (2, 8)
 
 
@@ -111,13 +117,21 @@ def _post(path: str, payload: dict, *, pauses: tuple, what: str) -> bool:
     return _post_response(path, payload, pauses=pauses, what=what)[0] is not None
 
 
-def send_report(payload: dict) -> tuple[bool, str]:
-    """POST a new-incident report to the agent. Returns (delivered, reason).
-    delivered is True only when the agent took it AND got it to the group; on
-    False the caller should use the fallback, and `reason` is a short code saying
-    why (agent_unreachable, agent_refused_401, whatsapp_disconnected,
-    send_failed, send_timeout, ...)."""
-    resp, why = _post_response(_REPORT_PATH, payload, pauses=_RETRY_PAUSES, what="report")
+def is_transient(reason: str) -> bool:
+    """Would offering the report to the agent again later plausibly work?
+    True for no answer / a 5xx; False for a refusal (wrong secret, bad body)
+    and for an agent that took the report but could not send it — it retries
+    that one itself every few minutes."""
+    return reason == "agent_unreachable" or reason.startswith("agent_error_")
+
+
+def send_report(payload: dict, *, pauses: tuple = ()) -> tuple[bool, str]:
+    """POST a new-incident report to the agent — one attempt unless `pauses` is
+    given. Returns (delivered, reason). delivered is True only when the agent
+    took it AND got it to the group; on False the caller should use the
+    fallback, and `reason` is a short code saying why (agent_unreachable,
+    agent_refused_401, whatsapp_disconnected, send_failed, send_timeout, ...)."""
+    resp, why = _post_response(_REPORT_PATH, payload, pauses=pauses, what="report")
     if resp is None:
         return False, why
     try:
@@ -133,6 +147,14 @@ def send_report(payload: dict) -> tuple[bool, str]:
             print("[agent] took the report, but its WhatsApp is disconnected — it will go out late from the agent")
             return False, "whatsapp_disconnected"
     return True, ""
+
+
+def retry_report(payload: dict) -> tuple[bool, str]:
+    """Keep offering a report the agent did not answer for — after the caller's
+    backup has already gone out. Same result as send_report(). Blocks for the
+    pauses, so call it from the background thread only."""
+    time.sleep(_RETRY_PAUSES[0])
+    return send_report(payload, pauses=_RETRY_PAUSES[1:])
 
 
 def push_officers(officers: list, *, retry: bool = True) -> bool:
