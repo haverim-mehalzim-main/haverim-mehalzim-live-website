@@ -38,6 +38,7 @@ from app.features.incidents.constants import (
     INCIDENT_HANDLED_BY_RON,
     SIGNIFICANT_INCIDENT,
     MAP_VISIBLE_STATUSES,
+    PREMIUM_PAYMENTS_ENABLED,
     ACTIVE_VOLUNTEERS_COUNT,
     PREMIUM_PRICE_USD,
     PREMIUM_PLAN_DEFAULT,
@@ -469,12 +470,13 @@ def payment_config():
     (not hardcoding in the bundle) keeps what the visitor sees and what the
     backend actually charges/checks on one source of truth.
     """
-    from app.features.incidents.constants import USD_TO_ILS, PREMIUM_PRICE_USD
+    from app.features.incidents.constants import USD_TO_ILS, PREMIUM_PRICE_USD, PREMIUM_PAYMENTS_ENABLED
     resp = jsonify({
         'success': True,
         'currencies': SUPPORTED_CURRENCIES,
         'usd_to_ils': USD_TO_ILS,
         'premium_price_usd': PREMIUM_PRICE_USD,
+        'premium_enabled': PREMIUM_PAYMENTS_ENABLED,
     })
     resp.headers['Cache-Control'] = 'public, max-age=3600'
     return resp, 200
@@ -563,6 +565,12 @@ def premium_start():
     bucket['count'] += 1
     if bucket['count'] > _PREMIUM_RATE_MAX:
         return jsonify({'success': False, 'message': 'Too many requests'}), 429
+
+    # Checkout is off while Tranzila's payment flow is down (see
+    # PREMIUM_PAYMENTS_ENABLED). Refused here as well as hidden on the page, so
+    # a direct call can't leave behind a pending payment that can never complete.
+    if not PREMIUM_PAYMENTS_ENABLED:
+        return jsonify({'success': False, 'message': 'Premium membership is available soon — stay tuned.'}), 503
 
     if not payment_configured():
         return jsonify({'success': False, 'message': 'Payments are not configured'}), 503

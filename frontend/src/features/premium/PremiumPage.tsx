@@ -12,6 +12,10 @@ export default function PremiumPage() {
   const [currency, setCurrency] = useState<Currency>('USD');
   const [rate, setRate] = useState(USD_TO_ILS_FALLBACK);
   const [priceUsd, setPriceUsd] = useState<number | null>(null);
+  // Checkout is off while Tranzila's payment flow is down. Defaults to "not
+  // available": until the backend says otherwise (or if the request fails),
+  // the page shows "available soon" rather than a form that can't complete.
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -25,6 +29,7 @@ export default function PremiumPage() {
         if (!j?.success) return;
         if (j.usd_to_ils > 0) setRate(j.usd_to_ils);
         if (j.premium_price_usd > 0) setPriceUsd(j.premium_price_usd);
+        setCheckoutOpen(j.premium_enabled === true);
       })
       .catch(() => {});
   }, []);
@@ -128,6 +133,14 @@ export default function PremiumPage() {
               <li>More benefits coming soon</li>
             </ul>
 
+            {!checkoutOpen ? (
+              <div className="premium-soon">
+                <div className="premium-soon-title">Available soon — stay tuned</div>
+                <p className="premium-soon-text">
+                  We&apos;re finishing setting up secure payments. Premium membership will open here shortly.
+                </p>
+              </div>
+            ) : (
             <form className="premium-form" onSubmit={submit}>
               <input
                 className="premium-input" value={name} onChange={e => setName(e.target.value)}
@@ -147,6 +160,7 @@ export default function PremiumPage() {
               </button>
               <div className="premium-secure">🔒 Processed securely by Tranzila. We never see your card details.</div>
             </form>
+            )}
           </div>
         )}
       </div>

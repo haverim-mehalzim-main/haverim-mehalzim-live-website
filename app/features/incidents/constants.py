@@ -314,6 +314,14 @@ COST_PER_LIFE = 5000
 # never change what someone is charged.
 PREMIUM_PRICE_USD = 500
 
+# Premium checkout is switched OFF while Tranzila's payment flow is not working
+# on their end (2026-10-12). While False, the Premium page shows "Available soon
+# — stay tuned" instead of the payment form, and /api/premium/start refuses to
+# create a pending payment. Set to True to bring the checkout back — both the
+# page and the endpoint follow this one constant (the page reads it from
+# /api/payment-config, which browsers may cache for up to an hour).
+PREMIUM_PAYMENTS_ENABLED = False
+
 # Single plan for now; kept as a named constant (not inlined at call sites) so
 # adding a second tier later is a matter of introducing more plan names, not
 # hunting down every place "standard" was typed.

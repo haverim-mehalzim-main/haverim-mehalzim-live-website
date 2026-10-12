@@ -197,6 +197,25 @@
 .premium-submit:hover:not(:disabled) { opacity: 0.9; }
 .premium-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.premium-soon {
+  text-align: center;
+  padding: 18px 16px;
+  border: 1px dashed var(--accent-amber);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+.premium-soon-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-amber);
+}
+.premium-soon-text {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .premium-secure {
   font-size: 11px;
   color: var(--text-muted);
