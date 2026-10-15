@@ -66,7 +66,7 @@ _COUNTRY_CODE_BY_NAME = {v: k for k, v in COUNTRY_NAME_BY_CODE.items()}
 from app.extensions import db
 from app.services.auth_service import AuthError, current_user, validate_email
 from app.services.account_service import user_has_role
-from app.services import incident_service, intake_officer_service
+from app.services import case_journey_service, incident_service, intake_officer_service
 from app.models import IntakeOfficer, Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
 
 incidents_bp = Blueprint('incidents', __name__)
@@ -888,13 +888,21 @@ _MACRO_INCIDENT_FIELDS = {
 }
 
 
+def _with_step_times(progress: dict | None, monday_item_id: str) -> dict | None:
+    """Adds when each finished step completed ({step: ISO time}) to a progress dict.
+    A step with no entry has no known time, and the page shows it done without one."""
+    if progress is not None:
+        progress['step_times'] = case_journey_service.step_times(monday_item_id)
+    return progress
+
+
 def _to_macro_incident_view(serialized: dict, monday_item_id: str) -> dict:
     macro = {k: v for k, v in serialized.items() if k in _MACRO_INCIDENT_FIELDS}
     # The warm, step-based framing already built for the public case tracker —
     # "We are with you", "Family Notified with Care" — is exactly the tone a
     # family/friend view should have, not a clinical Monday status label.
     status = fetch_case_status(monday_item_id)
-    macro['progress'] = status
+    macro['progress'] = _with_step_times(status, monday_item_id)
     return macro
 
 
@@ -1071,6 +1079,8 @@ def open_incident():
         submitted_patient_phone=patient_phone or None,
         submitted_description=description,
     )
+    # A case just arrived: schedule its "Request Received" step to complete in 30-60s.
+    case_journey_service.start_new_case(incident)
     db.session.commit()
 
     whatsapp_service.send_incident_report_in_background(
@@ -1184,7 +1194,7 @@ def incident_detail(local_id):
         # The same warm 8-step progress a family member sees, so the caller
         # gets the at-a-glance "where things stand" too. Built from the Monday
         # row already fetched above — no extra call.
-        serialized['progress'] = progress_from_row(monday_row)
+        serialized['progress'] = _with_step_times(progress_from_row(monday_row), incident.monday_item_id)
         return jsonify({
             'success': True,
             'relation': relation,
@@ -1417,7 +1427,7 @@ def my_donations():
             'currency': d.currency,
             'confirmed_at': d.confirmed_at.isoformat() if d.confirmed_at else None,
             'monday_item_id': d.monday_item_id,
-            'progress': fetch_case_status(d.monday_item_id) if d.monday_item_id else None,
+            'progress': _with_step_times(fetch_case_status(d.monday_item_id), d.monday_item_id) if d.monday_item_id else None,
         }
         result.append(entry)
 

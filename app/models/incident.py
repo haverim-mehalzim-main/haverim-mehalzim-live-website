@@ -57,6 +57,16 @@ class Incident(db.Model):
     # the once-only guard: webhook, reconcile job and the approve button can
     # all see the same transition, and only the first one to claim it sends.
     volunteers_notified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # The case-journey step (1-8) this case was last seen at — what lets the
+    # site notice a step being completed, from any source (staff on Monday, the
+    # WhatsApp agent, our own auto-advance) and stamp the time. NULL = never
+    # looked at yet, so cases that predate this get no invented history.
+    case_step_seen = db.Column(db.Integer, nullable=True)
+    # When "Request Received" is due to complete by itself (30-60s after the
+    # case arrives, picked once at random and kept, so a refresh never changes
+    # it). NULL = nothing scheduled. Cleared the moment the case is claimed for
+    # advancing, which is also the once-only guard (see case_journey_service).
+    step1_due_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
 
     user = db.relationship("User", back_populates="incidents")
@@ -66,6 +76,26 @@ class Incident(db.Model):
 
     def __repr__(self):
         return f"<Incident id={self.id} monday_item_id={self.monday_item_id!r}>"
+
+
+class CaseStepEvent(db.Model):
+    """When one step of a case's journey was completed. Monday only stores the
+    CURRENT stage, never when each earlier step finished, so the times shown to
+    families come from here. One row per (case, step); a step completed twice
+    (the stage moved back and forward again) keeps its first time. A step with
+    no row has no known time (e.g. cases from before this existed) and is shown
+    as done without one."""
+
+    __tablename__ = "case_step_events"
+    __table_args__ = (db.UniqueConstraint("incident_id", "step", name="uq_case_step_events_incident_step"),)
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    incident_id = db.Column(db.BigInteger, db.ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
+    step = db.Column(db.Integer, nullable=False)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    # 'auto' (the 30-60s automatic completion) or 'monday' (a person or the
+    # agent changed the stage on the board; the time is when we noticed).
+    source = db.Column(db.Text, nullable=False)
 
 
 class IncidentTask(db.Model):

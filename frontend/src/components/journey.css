@@ -84,6 +84,8 @@
 .journey-step.complete .journey-step-node { background: var(--tr-accent-soft); color: var(--tr-accent); }
 .journey-step.complete .journey-step-title { color: var(--tr-text-dim); font-weight: 500; }
 .journey-step.complete .journey-step-subtitle { color: #8f8776; }
+/* When a finished step completed: quiet, so the title and subtitle stay the focus. */
+.journey-step-time { margin-top: 4px; font-size: 13px; color: var(--tr-text-faint); font-variant-numeric: tabular-nums; }
 
 .journey-step.upcoming .journey-step-node { border: 1.5px solid var(--tr-border); color: var(--tr-text-faint); background: transparent; }
 .journey-step.upcoming .journey-step-title { color: #7d7564; font-weight: 500; }

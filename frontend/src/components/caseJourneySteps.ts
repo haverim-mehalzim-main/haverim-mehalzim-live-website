@@ -29,6 +29,24 @@ export const CASE_JOURNEY_STEPS_SENSITIVE: CaseStepDef[] = [
   { step: 8, title: 'Family Support & Next Steps',  subtitle: 'We continue supporting the family through the next steps.', icon: '♡' },
 ];
 
+// When each finished step completed, keyed by step number ("1".."8") — ISO
+// times from the server. A finished step with no entry has no known time (it
+// happened before times were recorded) and is shown as done without one.
+export type JourneyStepTimes = Record<string, string>;
+
+export function formatStepTime(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return null;
+  // Day, month and time in the viewer's own time zone; the year only when it
+  // isn't this one, so a recent step stays short.
+  const sameYear = when.getFullYear() === new Date().getFullYear();
+  return when.toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }),
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 export type JourneyStepState = 'complete' | 'active' | 'upcoming';
 
 export function journeyStepState(def: CaseStepDef, current: number): JourneyStepState {
