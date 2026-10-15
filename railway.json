@@ -4,6 +4,8 @@
     "builder": "RAILPACK"
   },
   "deploy": {
+    "preDeployCommand": "flask --app main db upgrade",
+    "preDeployTimeoutSeconds": 300,
     "startCommand": "gunicorn main:app --bind 0.0.0.0:$PORT"
   }
 }
