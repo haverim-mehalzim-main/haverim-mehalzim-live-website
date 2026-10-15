@@ -6,7 +6,7 @@ import LinkifiedText from '../../components/LinkifiedText';
 import CaseJourney from '../../components/CaseJourney';
 import CaseCompletion from '../../components/CaseCompletion';
 import CaseProgressSummary from '../../components/CaseProgressSummary';
-import { EffortSummaryCard, EffortSummaryReview, type EffortSummaryData } from '../../components/EffortSummary';
+import { EffortSummaryAdmin, EffortSummaryCard, type EffortSummaryData } from '../../components/EffortSummary';
 import './account.css';
 import './people.css';
 import { StaffShell } from '../staff/StaffShell';
@@ -1096,7 +1096,7 @@ export default function IncidentDetailPage() {
             <p className="family-empty">Updates will appear here as soon as the case starts to move.</p>
           )}
 
-          {effortSummary && <EffortSummaryCard summary={effortSummary} />}
+          {effortSummary?.status === 'approved' && <EffortSummaryCard summary={effortSummary} />}
 
           <p className="family-foot">
             You&apos;re following this case as a family member or friend. The person who opened it can
@@ -1209,8 +1209,8 @@ export default function IncidentDetailPage() {
 
             {relation === 'admin' && !inc.owner && <CallerInviteCard incidentId={inc.id} />}
 
-            {relation === 'admin' && effortSummary && (
-              <EffortSummaryReview summary={effortSummary} onChanged={setEffortSummary} />
+            {relation === 'admin' && inc.monday_item_id && (
+              <EffortSummaryAdmin mondayItemId={inc.monday_item_id} onSummaryChange={setEffortSummary} />
             )}
 
             {relation === 'admin' && (
@@ -1264,7 +1264,7 @@ export default function IncidentDetailPage() {
           />
         )}
 
-        {effortSummary && <EffortSummaryCard summary={effortSummary} />}
+        {effortSummary?.status === 'approved' && <EffortSummaryCard summary={effortSummary} />}
 
         <div className="account-card">
           <div className="account-incident-top">
