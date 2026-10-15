@@ -5,11 +5,11 @@ from app.models.donor_profile import DonorProfile
 from app.models.premium_membership import PremiumMembership
 from app.models.payment import Payment, PaymentPurpose, PaymentStatus
 from app.models.intake_officer import IntakeOfficer
-from app.models.incident import Incident, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentFollower, IncidentVolunteer, IncidentRejection, IncidentCallerInvite, CaseStepEvent
+from app.models.incident import Incident, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentFollower, IncidentVolunteer, IncidentRejection, IncidentCallerInvite, CaseStepEvent, IncidentEffortSummary
 
 __all__ = [
     "User", "UserStatus", "Role", "UserRole", "DonorProfile",
     "PremiumMembership", "Payment", "PaymentPurpose", "PaymentStatus",
     "Incident", "IncidentTask", "IncidentTaskAssignee", "IncidentTaskStatus", "IncidentFollower", "IncidentVolunteer",
-    "IncidentRejection", "IncidentCallerInvite", "CaseStepEvent", "IntakeOfficer",
+    "IncidentRejection", "IncidentCallerInvite", "CaseStepEvent", "IncidentEffortSummary", "IntakeOfficer",
 ]

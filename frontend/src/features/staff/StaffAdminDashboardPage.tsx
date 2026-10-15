@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { StaffGate, StaffShell } from './StaffShell';
 import { useStaffData } from './useStaffData';
+import { EffortSummaryReview, type EffortSummaryData } from '../../components/EffortSummary';
 
 interface VolunteerRequester {
   request_id: number;
@@ -70,6 +71,42 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+interface PendingEffortSummary extends EffortSummaryData {
+  incident_name: string;
+  local_id: number | null;
+}
+
+// Effort estimates the WhatsApp agent sent from incident groups. Nothing here
+// reaches a caller or family until it is approved, so the queue sits on the
+// dashboard where an admin will see it.
+function EffortApprovals() {
+  const { data, setData } = useStaffData<{ summaries: PendingEffortSummary[] }>('/api/staff/effort-summaries');
+  if (!data) return null;
+  const count = data.summaries.length;
+  const decided = (id: number) =>
+    setData(prev => (prev ? { ...prev, summaries: prev.summaries.filter(s => s.id !== id) } : prev));
+
+  return (
+    <section className="staff-section">
+      <h2 className="staff-section-title">Effort summaries{count > 0 ? ` · ${count} waiting` : ''}</h2>
+      <div className="staff-card">
+        {count === 0 ? (
+          <div className="staff-empty">No effort summaries are waiting for approval.</div>
+        ) : (
+          data.summaries.map(s => (
+            <div key={s.id} className="staff-card-pad">
+              <div className="staff-row-title">
+                {s.local_id ? <Link to={`/incidents/${s.local_id}`}>{s.incident_name}</Link> : s.incident_name}
+              </div>
+              <EffortSummaryReview summary={s} compact onChanged={() => decided(s.id)} />
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AdminDashboard() {
   const { data, error } = useStaffData<AdminDashboardData>('/api/staff/admin-dashboard');
 
@@ -111,6 +148,8 @@ function AdminDashboard() {
               <WorkloadColumn title="Supervisors" data={data.supervisor_workload} />
             </div>
           </section>
+
+          <EffortApprovals />
 
           <section className="staff-section">
             <h2 className="staff-section-title">

@@ -6,6 +6,7 @@ import LinkifiedText from '../../components/LinkifiedText';
 import CaseJourney from '../../components/CaseJourney';
 import CaseCompletion from '../../components/CaseCompletion';
 import CaseProgressSummary from '../../components/CaseProgressSummary';
+import { EffortSummaryCard, EffortSummaryReview, type EffortSummaryData } from '../../components/EffortSummary';
 import './account.css';
 import './people.css';
 import { StaffShell } from '../staff/StaffShell';
@@ -986,6 +987,8 @@ export default function IncidentDetailPage() {
   const [joined, setJoined] = useState(true);
   const [joinRequested, setJoinRequested] = useState(false);
   const [volunteerRequests, setVolunteerRequests] = useState<VolunteerRequest[]>([]);
+  // Callers and families get it only once approved; an admin gets the latest in any state.
+  const [effortSummary, setEffortSummary] = useState<EffortSummaryData | null>(null);
   // What the admin just decided on a new request, kept so the confirmation
   // stays on screen after the incident's status changes underneath it.
   const [triageOutcome, setTriageOutcome] = useState<TriageOutcome | null>(null);
@@ -1008,6 +1011,7 @@ export default function IncidentDetailPage() {
         setJoined(j.joined !== false);
         setJoinRequested(!!j.join_requested);
         setVolunteerRequests(j.volunteer_requests || []);
+        setEffortSummary(j.effort_summary || null);
         setState('ready');
       })
       .catch(e => setState(e.message === 'not_found' ? 'not_found' : 'error'));
@@ -1091,6 +1095,8 @@ export default function IncidentDetailPage() {
           ) : (
             <p className="family-empty">Updates will appear here as soon as the case starts to move.</p>
           )}
+
+          {effortSummary && <EffortSummaryCard summary={effortSummary} />}
 
           <p className="family-foot">
             You&apos;re following this case as a family member or friend. The person who opened it can
@@ -1203,6 +1209,10 @@ export default function IncidentDetailPage() {
 
             {relation === 'admin' && !inc.owner && <CallerInviteCard incidentId={inc.id} />}
 
+            {relation === 'admin' && effortSummary && (
+              <EffortSummaryReview summary={effortSummary} onChanged={setEffortSummary} />
+            )}
+
             {relation === 'admin' && (
               <VolunteerRequestsCard incidentId={inc.id} requests={volunteerRequests} onChanged={setVolunteerRequests} />
             )}
@@ -1253,6 +1263,8 @@ export default function IncidentDetailPage() {
             times={inc.progress.step_times}
           />
         )}
+
+        {effortSummary && <EffortSummaryCard summary={effortSummary} />}
 
         <div className="account-card">
           <div className="account-incident-top">

@@ -239,3 +239,45 @@ class IncidentCallerInvite(db.Model):
 
     def __repr__(self):
         return f"<IncidentCallerInvite incident_id={self.incident_id} claimed={self.claimed_at is not None}>"
+
+
+class IncidentEffortSummary(db.Model):
+    """The effort estimate the WhatsApp agent calculated for a finished incident
+    ("@חמל שלח סיכום אירוע לאתר"), waiting for — or past — an admin's review.
+
+    One row per Monday item, always the LATEST send: the agent posting a new
+    estimate replaces the numbers and puts the row back to 'pending', so numbers
+    an admin never saw are never shown under an earlier approval. Callers and
+    families only ever see rows whose status is 'approved' — the review exists so
+    a wrong or confusing estimate never reaches them.
+
+    Keyed by the Monday item id (not Incident.id) because the agent only knows the
+    board item, and most board items have no local Incident row.
+
+    The breakdown (five roles + field operations + other volunteers) is meant to add
+    up to the total. Every number is stored as sent, so the figures an admin approved
+    are the ones later shown, whatever changes elsewhere."""
+
+    __tablename__ = "incident_effort_summaries"
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    monday_item_id = db.Column(db.Text, nullable=False, unique=True)
+    status = db.Column(db.Text, nullable=False, default="pending", server_default="pending")  # pending | approved | rejected
+
+    total_hours = db.Column(db.Float, nullable=False)
+    supervisors_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    case_managers_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    command_center_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    doctors_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    mental_health_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    # "Field operations" (שטח): the field volunteers' hours only.
+    field_operations_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    other_hours = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    volunteers_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+
+    submitted_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    reviewed_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    def __repr__(self):
+        return f"<IncidentEffortSummary monday_item_id={self.monday_item_id!r} status={self.status}>"

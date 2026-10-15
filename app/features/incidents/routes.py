@@ -66,8 +66,8 @@ _COUNTRY_CODE_BY_NAME = {v: k for k, v in COUNTRY_NAME_BY_CODE.items()}
 from app.extensions import db
 from app.services.auth_service import AuthError, current_user, validate_email
 from app.services.account_service import user_has_role
-from app.services import case_journey_service, incident_service, intake_officer_service
-from app.models import IntakeOfficer, Incident, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
+from app.services import case_journey_service, effort_summary_service, incident_service, intake_officer_service
+from app.models import IntakeOfficer, Incident, IncidentEffortSummary, IncidentFollower, IncidentTask, IncidentTaskAssignee, IncidentVolunteer
 
 incidents_bp = Blueprint('incidents', __name__)
 
@@ -928,6 +928,19 @@ def _serialize_volunteer_request(request: IncidentVolunteer) -> dict:
     }
 
 
+def _approved_effort_summary(monday_item_id: str) -> dict | None:
+    """What a caller or family member may see: the estimate only once approved."""
+    row = effort_summary_service.get_approved_for_item(monday_item_id)
+    return effort_summary_service.serialize(row) if row is not None else None
+
+
+def _any_effort_summary(monday_item_id: str) -> dict | None:
+    """What an admin sees on the case page: the latest estimate in any state, so
+    the page can say it is waiting for approval and offer the decision there."""
+    row = effort_summary_service.get_for_item(monday_item_id)
+    return effort_summary_service.serialize(row) if row is not None else None
+
+
 def _staff_role_check(*, admin_only: bool = False):
     """Returns the current user if they're allowed to act on staff incident
     endpoints, else None. Volunteers can view and mark tasks done; only
@@ -1186,6 +1199,7 @@ def incident_detail(local_id):
             'success': True,
             'relation': relation,
             'incident': _to_macro_incident_view(serialized, incident.monday_item_id),
+            'effort_summary': _approved_effort_summary(incident.monday_item_id),
             'tasks': [],
         }), 200
 
@@ -1199,6 +1213,7 @@ def incident_detail(local_id):
             'success': True,
             'relation': relation,
             'incident': serialized,
+            'effort_summary': _approved_effort_summary(incident.monday_item_id),
             'tasks': [_serialize_task(t) for t in tasks],
         }), 200
 
@@ -1212,6 +1227,7 @@ def incident_detail(local_id):
             'relation': relation,
             'is_owner': is_owner,
             'incident': serialized,
+            'effort_summary': _any_effort_summary(incident.monday_item_id),
             'tasks': [_serialize_task(t) for t in tasks],
             'volunteer_requests': [_serialize_volunteer_request(r) for r in pending],
         }), 200
@@ -2022,6 +2038,83 @@ def deny_incident_volunteer(local_id, request_id):
     db.session.delete(request_row)
     db.session.commit()
     return jsonify({'success': True}), 200
+
+
+@incidents_bp.route('/api/agent/effort-summary', methods=['POST'])
+def agent_effort_summary():
+    """The WhatsApp agent posts the effort estimate it just wrote to Monday
+    ("@חמל שלח סיכום אירוע לאתר"). Stored as PENDING: nothing reaches a caller
+    or family page until an admin approves it (see the staff routes below).
+
+    Same shared secret as everything else between the site and the agent
+    (AGENT_API_SECRET), here in the other direction: the agent sends it as a
+    Bearer token. Unset on the site = the endpoint is disabled (404), so a
+    deployment that never configured it can't be written to."""
+    from flask import request
+    from app.config import AGENT_API_SECRET
+
+    if not AGENT_API_SECRET:
+        return jsonify({'success': False}), 404
+    header = request.headers.get('Authorization', '')
+    sent = header[len('Bearer '):] if header.startswith('Bearer ') else ''
+    # Hashed first so the comparison takes the same time whatever the lengths.
+    if not hmac.compare_digest(hashlib.sha256(sent.encode()).digest(), hashlib.sha256(AGENT_API_SECRET.encode()).digest()):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'success': False, 'message': 'JSON body required'}), 400
+    try:
+        row = effort_summary_service.submit(body)
+    except effort_summary_service.EffortSummaryError as e:
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+    db.session.commit()
+    return jsonify({'success': True, 'status': row.status}), 200
+
+
+@incidents_bp.route('/api/staff/effort-summaries')
+def staff_pending_effort_summaries():
+    """Estimates waiting for an admin's decision, oldest first, each with the
+    case's name so the admin knows what they are approving."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    rows = effort_summary_service.list_pending()
+    monday_rows = fetch_incidents_by_ids([r.monday_item_id for r in rows]) if rows else []
+    by_id = {str(m['id']): m for m in monday_rows}
+    local = {
+        i.monday_item_id: i.id
+        for i in Incident.query.filter(Incident.monday_item_id.in_([r.monday_item_id for r in rows])).all()
+    } if rows else {}
+    out = []
+    for r in rows:
+        item = effort_summary_service.serialize(r)
+        item['incident_name'] = (by_id.get(r.monday_item_id) or {}).get('name') or f'Case {r.monday_item_id}'
+        item['local_id'] = local.get(r.monday_item_id)
+        out.append(item)
+    return jsonify({'success': True, 'summaries': out}), 200
+
+
+def _review_effort_summary(summary_id: int, *, approve: bool):
+    user = _staff_role_check(admin_only=True)
+    if user is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    row = db.session.get(IncidentEffortSummary, summary_id)
+    if row is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    effort_summary_service.review(row, approve=approve, reviewer=user)
+    db.session.commit()
+    return jsonify({'success': True, 'summary': effort_summary_service.serialize(row)}), 200
+
+
+@incidents_bp.route('/api/staff/effort-summaries/<int:summary_id>/approve', methods=['POST'])
+def approve_effort_summary(summary_id):
+    return _review_effort_summary(summary_id, approve=True)
+
+
+@incidents_bp.route('/api/staff/effort-summaries/<int:summary_id>/reject', methods=['POST'])
+def reject_effort_summary(summary_id):
+    return _review_effort_summary(summary_id, approve=False)
 
 
 @incidents_bp.route('/api/health')
