@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { clearStaffDataCache } from '../features/staff/useStaffData';
 
 // The user's highest access level (admin > volunteer > client/"caller" >
 // family), decided once by the server — screens read this instead of
@@ -30,8 +31,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch('/api/auth/me');
       const json = await res.json();
-      setUser(res.ok && json.success ? (json.user as AuthUser) : null);
+      const next = res.ok && json.success ? (json.user as AuthUser) : null;
+      // A different person (or a session that expired) must not see the
+      // previous user's cached staff data.
+      setUser(prev => {
+        if (prev?.email !== next?.email) clearStaffDataCache();
+        return next;
+      });
     } catch {
+      clearStaffDataCache();
       setUser(null);
     } finally {
       setLoading(false);
@@ -42,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
+      clearStaffDataCache();
       setUser(null);
     }
   }, []);

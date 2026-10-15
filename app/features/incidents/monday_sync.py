@@ -22,7 +22,7 @@ from flask import Blueprint, jsonify, request
 
 from app.config import BOARD_ID, MONDAY_HEADERS, MONDAY_URL, MONDAY_WEBHOOK_SECRET, PUBLIC_BASE_URL
 from app.extensions import db
-from app.features.incidents.service import fetch_incidents_by_ids, fetch_monday_data
+from app.features.incidents.service import fetch_incidents_by_ids, fetch_monday_data, invalidate_board_cache
 from app.models import Incident
 from app.services import incident_service
 
@@ -55,6 +55,11 @@ def monday_webhook(secret):
     if not item_id.isdigit() or (event_board and event_board != str(BOARD_ID)):
         return jsonify({'success': True, 'ignored': True}), 200
 
+    # The item changed on Monday, so the next dashboard / queue read must
+    # refetch. Placed after the checks above so a forged call for an item that
+    # isn't ours can't be used to force refetches.
+    invalidate_board_cache()
+
     # Only the item id is taken from the payload; the values are re-read from
     # Monday, so a forged or stale payload can't write anything into our copy.
     rows = fetch_incidents_by_ids([item_id])
@@ -67,6 +72,8 @@ def monday_webhook(secret):
 def reconcile() -> dict:
     """Re-read the whole board and bring every local row in line with it.
     Never deletes: a local row whose Monday item is gone is only reported."""
+    # The reconcile is the check on everything else, so it must read Monday itself.
+    invalidate_board_cache()
     rows = fetch_monday_data(include_unlocated=True)
     if rows is None:
         raise RuntimeError('Could not read the Monday board — nothing was changed.')

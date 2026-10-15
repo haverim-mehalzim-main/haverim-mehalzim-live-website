@@ -1,6 +1,8 @@
 import os
 import json
 import re
+import threading
+import time
 from datetime import datetime
 
 import requests
@@ -73,13 +75,97 @@ _QUERY = """
 """ % (BOARD_ID, _COL_IDS)
 
 
+# ── In-process cache of the whole board ─────────────────────────────────────
+# Every dashboard / map / staff-queue request used to re-download the full
+# board (500 items x 26 columns) from Monday, which takes seconds. One cached
+# copy now serves them all. Freshness comes from invalidation, not the TTL:
+# the Monday webhook and every write we make call invalidate_board_cache(), so
+# staff see changes at once; the TTL is only the safety net for a missed
+# webhook. Per-process: gunicorn runs a single worker here (railway.json), so
+# an invalidation reaches every request — with more workers each would need
+# its own, and the TTL would bound the staleness.
+_BOARD_CACHE_TTL = 60            # seconds a copy is served without asking Monday
+_BOARD_CACHE_MAX_STALE = 15 * 60  # oldest copy we'll serve if Monday is failing
+_BOARD_FETCH_TIMEOUT = 20        # was unbounded: a hung Monday call hung the page
+
+# fetched_at is when the rows were really read (it ages the stale fallback);
+# invalid is set by a write/webhook and means "refetch on next read".
+_board_cache = {'rows': None, 'fetched_at': 0.0, 'invalid': True, 'generation': 0}
+# Held for the whole refresh, so a burst of requests on an expired cache makes
+# one Monday call and the rest wait for its result instead of each making their own.
+_board_cache_lock = threading.Lock()
+
+
+def invalidate_board_cache() -> None:
+    """Mark the cached board out of date. The rows are kept (still usable as a
+    fallback if Monday is down) but the next read refetches. The generation bump
+    stops a refresh already in flight from re-stamping its older data as fresh."""
+    _board_cache['generation'] += 1
+    _board_cache['invalid'] = True
+
+
+def _cache_is_fresh() -> bool:
+    return (
+        _board_cache['rows'] is not None
+        and not _board_cache['invalid']
+        and time.monotonic() - _board_cache['fetched_at'] < _BOARD_CACHE_TTL
+    )
+
+
+def _cached_board_rows():
+    """Every board row (including unlocated ones), or None if Monday can't be
+    read and there is no recent enough copy to fall back on."""
+    if _cache_is_fresh():
+        return _board_cache['rows']
+
+    with _board_cache_lock:
+        # Another request may have refreshed while this one waited for the lock.
+        if _cache_is_fresh():
+            return _board_cache['rows']
+
+        generation = _board_cache['generation']
+        rows = _fetch_board_rows_from_monday()
+        if rows is not None:
+            _board_cache['rows'] = rows
+            _board_cache['fetched_at'] = time.monotonic()
+            # Invalidated mid-fetch: this copy may predate the write, so keep it
+            # only as a fallback and leave it expired.
+            _board_cache['invalid'] = generation != _board_cache['generation']
+            return rows
+
+        # Monday failed or is slow. A slightly old board beats an error page,
+        # but not an arbitrarily old one.
+        stale = _board_cache['rows']
+        if stale is not None and time.monotonic() - _board_cache['fetched_at'] < _BOARD_CACHE_MAX_STALE:
+            print("[fetch_monday_data] Monday failed — serving the cached board")
+            return stale
+        return None
+
+
 def fetch_monday_data(include_unlocated: bool = False):
     """Every board item flattened to {column_id: text}. Items with neither a
     location nor a country are dropped by default (they can't be placed on
     the map); the Monday->DB reconcile job passes include_unlocated=True to
-    see literally everything."""
+    see literally everything. Served from a short-lived cache (see above);
+    rows are copied so a caller that edits one can't corrupt the shared copy."""
+    rows = _cached_board_rows()
+    if rows is None:
+        return None
+    if not include_unlocated:
+        rows = [
+            r for r in rows
+            if (r.get('location_mkmbv7be') or '').strip() or (r.get('country_mkmb91h3') or '').strip()
+        ]
+    return [dict(r) for r in rows]
+
+
+def _fetch_board_rows_from_monday():
+    """One uncached read of the whole board, with unlocated items included —
+    callers filter, so a single cached copy serves both views."""
     try:
-        response = requests.post(MONDAY_URL, json={'query': _QUERY}, headers=MONDAY_HEADERS)
+        response = requests.post(
+            MONDAY_URL, json={'query': _QUERY}, headers=MONDAY_HEADERS, timeout=_BOARD_FETCH_TIMEOUT,
+        )
 
         if response.status_code != 200:
             print(f"HTTP Error {response.status_code}: {response.text}")
@@ -109,17 +195,13 @@ def fetch_monday_data(include_unlocated: bool = False):
                     except (ValueError, TypeError):
                         pass
 
-            location = row.get('location_mkmbv7be', '').strip()
-            country  = row.get('country_mkmb91h3',  '').strip()
-
-            if not location and not country and not include_unlocated:
+            if not (row.get('location_mkmbv7be') or '').strip() and not (row.get('country_mkmb91h3') or '').strip():
                 missing_count += 1
-            else:
-                processed_rows.append(row)
+            processed_rows.append(row)
 
         print(
             f"[fetch_monday_data] total={len(items)} "
-            f"with_location={len(processed_rows)} "
+            f"with_location={len(items) - missing_count} "
             f"missing_location={missing_count}"
         )
 
@@ -327,6 +409,8 @@ def create_incident(
 
     _set_location_best_effort(item_id, city, country_name)
 
+    # After the best-effort writes too, so the next read sees the finished item.
+    invalidate_board_cache()
     return item_id
 
 
@@ -386,6 +470,8 @@ def _set_patient_phone_best_effort(item_id: str, patient_phone: str, country_cod
         data = resp.json()
         if "errors" in data:
             print(f"[service] Monday error setting patient phone on {item_id}: {data['errors']}")
+        else:
+            invalidate_board_cache()
     except Exception as e:
         print(f"[service] Failed to set patient phone on {item_id}: {e}")
 
@@ -409,6 +495,7 @@ def _mutate_columns(item_id: str, values: dict) -> bool:
         if "errors" in data:
             print(f"[service] Monday error updating item {item_id}: {data['errors']}")
             return False
+        invalidate_board_cache()
         return True
     except Exception as e:
         print(f"[service] Failed to update item {item_id}: {e}")

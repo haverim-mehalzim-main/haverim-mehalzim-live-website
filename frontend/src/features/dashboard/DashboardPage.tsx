@@ -33,6 +33,10 @@ const DONATION_TIERS: DonationTier[] = [
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
+// Public aggregate numbers only (no personal data), so unlike the staff
+// responses it is safe to keep across navigations without clearing on logout.
+let lastDashboard: { data: DashboardData; time: string } | null = null;
+
 async function fetchDashboard(): Promise<DashboardData> {
   const res = await fetch('/api/dashboard');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1086,16 +1090,20 @@ function GeoPeriodModal({ currentMonth, lastMonth, data, onClose }: {
 export default function DashboardPage() {
   const { openDonate } = useDonate();
   const { user } = useAuth();
-  const [data, setData]             = useState<DashboardData | null>(null);
+  // Start from the last copy fetched in this tab so coming back to the page is
+  // instant; load() below still refreshes it right away.
+  const [data, setData]             = useState<DashboardData | null>(lastDashboard?.data ?? null);
   const [error, setError]           = useState<string | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<string>('—');
+  const [lastUpdate, setLastUpdate] = useState<string>(lastDashboard?.time ?? '—');
   const [geoModalOpen, setGeoModalOpen] = useState(false);
 
   const load = () => {
     fetchDashboard()
       .then(d => {
+        const time = new Date().toLocaleTimeString('en-GB');
+        lastDashboard = { data: d, time };
         setData(d);
-        setLastUpdate(new Date().toLocaleTimeString('en-GB'));
+        setLastUpdate(time);
         setError(null);
       })
       .catch(e => setError(e.message));
