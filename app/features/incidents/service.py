@@ -102,6 +102,38 @@ def invalidate_board_cache() -> None:
     stops a refresh already in flight from re-stamping its older data as fresh."""
     _board_cache['generation'] += 1
     _board_cache['invalid'] = True
+    _board_refresh_wakeup.set()  # the refresher (if running) refetches right away
+
+
+_BOARD_REFRESH_INTERVAL = 30  # half the TTL: the cache is renewed before it can expire
+_board_refresh_wakeup = threading.Event()
+_board_refresher_started = False
+
+
+def start_board_refresher() -> None:
+    """Keep the cache warm from a background thread, so no visitor ever waits on
+    Monday: without it, whoever arrives after a deploy, an expiry or a write pays
+    the ~5s fetch themselves. Refreshes every _BOARD_REFRESH_INTERVAL, and at once
+    when a write or webhook invalidates the cache. Safe to call twice."""
+    global _board_refresher_started
+    if _board_refresher_started or not BOARD_ID:
+        return
+    _board_refresher_started = True
+
+    def _loop():
+        while True:
+            # Cleared before the fetch, not after the wait: an invalidation that
+            # lands while fetching must still wake the next wait, not be erased.
+            _board_refresh_wakeup.clear()
+            try:
+                # Forced: a plain read would be a no-op until the copy expires,
+                # leaving a window where a request finds it stale and waits.
+                _cached_board_rows(force=True)
+            except Exception as e:  # noqa: BLE001 — must never kill the thread
+                print(f"[board-refresher] {e}")
+            _board_refresh_wakeup.wait(_BOARD_REFRESH_INTERVAL)
+
+    threading.Thread(target=_loop, name='board-refresher', daemon=True).start()
 
 
 def _cache_is_fresh() -> bool:
@@ -112,15 +144,16 @@ def _cache_is_fresh() -> bool:
     )
 
 
-def _cached_board_rows():
+def _cached_board_rows(force: bool = False):
     """Every board row (including unlocated ones), or None if Monday can't be
-    read and there is no recent enough copy to fall back on."""
-    if _cache_is_fresh():
+    read and there is no recent enough copy to fall back on. `force` refetches
+    even though the copy is still fresh — used by the background refresher."""
+    if not force and _cache_is_fresh():
         return _board_cache['rows']
 
     with _board_cache_lock:
         # Another request may have refreshed while this one waited for the lock.
-        if _cache_is_fresh():
+        if not force and _cache_is_fresh():
             return _board_cache['rows']
 
         generation = _board_cache['generation']

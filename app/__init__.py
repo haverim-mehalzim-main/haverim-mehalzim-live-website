@@ -64,6 +64,19 @@ def create_app():
         timer.daemon = True
         timer.start()
 
+    # Background threads (only in a real server process): the Monday cache warmer, and
+    # the worker that completes step 1 of new cases. Keep the Monday board cache warm so the first visitor after a deploy or an
+    # expiry doesn't wait ~5s (see service.start_board_refresher). Only in a real
+    # server process: not for `flask ...` commands (the reconcile cron, migrations
+    # — they'd start a thread they don't need), not under tests, and not in the
+    # debug reloader's parent process (it would run a second copy next to the child).
+    reloader_parent = os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes') and os.getenv('WERKZEUG_RUN_MAIN') != 'true'
+    if not (os.getenv('FLASK_RUN_FROM_CLI') or app.config.get('TESTING') or reloader_parent):
+        from app.features.incidents.service import start_board_refresher
+        from app.services import case_journey_service
+        start_board_refresher()
+        case_journey_service.start_worker(app)  # completes step 1 of new cases after 30-60s
+
     # Tranzila POSTs the payment result back to the redirect URLs. The SPA
     # fallback below only serves GET, so a POST would 405. Bounce it to GET
     # (303) so React renders the thanks/failed page cleanly and a refresh

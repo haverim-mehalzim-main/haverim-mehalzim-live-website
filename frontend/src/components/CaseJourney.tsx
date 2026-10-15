@@ -1,4 +1,4 @@
-import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState, type CaseStepDef } from './caseJourneySteps';
+import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, formatStepTime, journeyStepState, type CaseStepDef, type JourneyStepTimes } from './caseJourneySteps';
 import './journey.css';
 
 const RADIUS = 74;
@@ -7,12 +7,13 @@ const CIRC = 2 * Math.PI * RADIUS;
 // The case's progress as a family sees it: a glowing ring with where things
 // stand now, then every step in order. Used by the public tracker page and by
 // the followed-case page in a family member's account, so both always match.
-export default function CaseJourney({ step, total, sensitive, showHero = true, note }: {
+export default function CaseJourney({ step, total, sensitive, showHero = true, note, times }: {
   step: number;
   total: number;
   sensitive: boolean;
   showHero?: boolean;
   note?: string;
+  times?: JourneyStepTimes;
 }) {
   const steps = sensitive ? CASE_JOURNEY_STEPS_SENSITIVE : CASE_JOURNEY_STEPS;
   const current = Math.min(Math.max(step, 1), total);
@@ -54,22 +55,24 @@ export default function CaseJourney({ step, total, sensitive, showHero = true, n
 
       <h3 className="journey-section-title">Every step, in order</h3>
 
-      <JourneyTimeline steps={steps} current={current} />
+      <JourneyTimeline steps={steps} current={current} times={times} />
     </div>
   );
 }
 
 // Every step in order, with the current one highlighted. Shared by the full
 // family view above and the caller's compact progress card.
-export function JourneyTimeline({ steps, current, className = '' }: {
+export function JourneyTimeline({ steps, current, className = '', times }: {
   steps: CaseStepDef[];
   current: number;
   className?: string;
+  times?: JourneyStepTimes;
 }) {
   return (
     <div className={`journey-timeline ${className}`.trim()}>
       {steps.map((s, idx) => {
         const state = journeyStepState(s, current);
+        const completedAt = state === 'complete' ? formatStepTime(times?.[String(s.step)]) : null;
         return (
           <div key={s.step}>
             {idx > 0 && <div className={`journey-connector journey-connector--${s.step <= current ? 'filled' : 'empty'}`} />}
@@ -80,6 +83,11 @@ export function JourneyTimeline({ steps, current, className = '' }: {
               <div className="journey-step-body">
                 <div className="journey-step-title">{s.title}</div>
                 <div className="journey-step-subtitle">{s.subtitle}</div>
+                {completedAt && (
+                  <div className="journey-step-time">
+                    Completed <time dateTime={times?.[String(s.step)]}>{completedAt}</time>
+                  </div>
+                )}
                 {state === 'active' && <span className="journey-step-pill">Happening now</span>}
               </div>
             </div>

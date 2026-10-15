@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState } from './caseJourneySteps';
+import { CASE_JOURNEY_STEPS, CASE_JOURNEY_STEPS_SENSITIVE, journeyStepState, type JourneyStepTimes } from './caseJourneySteps';
 import { JourneyTimeline } from './CaseJourney';
 import './journey.css';
 
@@ -11,10 +11,11 @@ const CIRC = 2 * Math.PI * R;
 // is one tap away but stays closed by default, so the page keeps its calm
 // rhythm (the family view shows the whole list; the caller has more on the
 // page and needs the answer first, the detail on demand).
-export default function CaseProgressSummary({ step, total, sensitive }: {
+export default function CaseProgressSummary({ step, total, sensitive, times }: {
   step: number;
   total: number;
   sensitive: boolean;
+  times?: JourneyStepTimes;
 }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
@@ -72,7 +73,7 @@ export default function CaseProgressSummary({ step, total, sensitive }: {
 
       {open && (
         <div id={listId}>
-          <JourneyTimeline steps={steps} current={current} className="jc-list" />
+          <JourneyTimeline steps={steps} current={current} className="jc-list" times={times} />
         </div>
       )}
     </section>

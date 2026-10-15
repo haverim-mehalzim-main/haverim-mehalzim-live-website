@@ -42,6 +42,8 @@ interface IncidentDetail {
     step_subtitle: string;
     total_steps: number;
     is_sensitive: boolean;
+    // When each finished step completed, keyed by step number; absent = unknown.
+    step_times?: Record<string, string>;
   } | null;
 
   // ── Extended case detail (admin dashboard + edit) ──────────────────────
@@ -1081,6 +1083,7 @@ export default function IncidentDetailPage() {
                 step={inc.progress.step}
                 total={inc.progress.total_steps}
                 sensitive={inc.progress.is_sensitive}
+                times={inc.progress.step_times}
                 showHero={inc.progress.step < inc.progress.total_steps}
                 note="You don't need to do anything right now. This page updates by itself."
               />
@@ -1247,6 +1250,7 @@ export default function IncidentDetailPage() {
             step={inc.progress.step}
             total={inc.progress.total_steps}
             sensitive={inc.progress.is_sensitive}
+            times={inc.progress.step_times}
           />
         )}
 

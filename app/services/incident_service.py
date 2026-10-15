@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 from app.models import Incident, IncidentCallerInvite, IncidentFollower, IncidentRejection, IncidentTask, IncidentTaskAssignee, IncidentTaskStatus, IncidentVolunteer, Payment, PaymentStatus
-from app.services import volunteer_alert_service
+from app.services import case_journey_service, volunteer_alert_service
 from app.services.account_service import grant_role
 
 
@@ -300,12 +300,17 @@ def mirror_monday_values(incident: Incident, monday_row: dict) -> bool:
     return changed
 
 
-def sync_local_incidents_from_monday(monday_rows: list[dict] | None) -> dict:
+def sync_local_incidents_from_monday(monday_rows: list[dict] | None, *, schedule_new_cases: bool = False) -> dict:
     """Create a shadow Incident row (user_id=None — no caller account, just a
     Monday item) for every row in monday_rows that doesn't have a local row
     yet, and refresh every existing row's copy of city / phone / description
     from Monday. Returns {'created': n, 'updated': m, 'alerted': k}. Does not commit.
-    A failed Monday fetch (None) is a no-op, not an error."""
+    A failed Monday fetch (None) is a no-op, not an error.
+
+    schedule_new_cases: set only by the Monday webhook. A row created here by the
+    webhook is a case that has JUST arrived, so its step 1 is scheduled to complete
+    by itself; a row created by the reconcile job or an admin page load is an old
+    item we are only now mirroring, and must never be scheduled."""
     rows_by_id = {str(row['id']): row for row in (monday_rows or []) if row.get('id')}
     stats = {'created': 0, 'updated': 0, 'alerted': 0}
     if not rows_by_id:
@@ -325,6 +330,7 @@ def sync_local_incidents_from_monday(monday_rows: list[dict] | None) -> dict:
             stats['updated'] += 1
         # A case that is now "Working on it" is open to volunteers: alert them
         # once (see volunteer_alert_service). The emails go out after commit.
+        case_journey_service.observe(incident, row, is_new_arrival=schedule_new_cases and monday_item_id not in existing)
         if volunteer_alert_service.claim_if_newly_in_progress(incident, row):
             stats['alerted'] += 1
     return stats

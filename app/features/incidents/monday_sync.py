@@ -64,7 +64,10 @@ def monday_webhook(secret):
     # Monday, so a forged or stale payload can't write anything into our copy.
     rows = fetch_incidents_by_ids([item_id])
     if rows:
-        incident_service.sync_local_incidents_from_monday(rows)
+        # The webhook is the one place a freshly created item is recognised as a
+        # new arrival (the reconcile job only ever sees old ones), so only here
+        # is its step 1 scheduled to complete by itself.
+        incident_service.sync_local_incidents_from_monday(rows, schedule_new_cases=True)
         db.session.commit()
     return jsonify({'success': True}), 200
 
