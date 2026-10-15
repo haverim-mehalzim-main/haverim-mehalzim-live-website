@@ -1,0 +1,26 @@
+/* Effort summary. Shared by the caller/family pages (account theme) and the admin
+   review (staff theme), so colours inherit from the surrounding card instead of
+   naming either theme's variables. */
+
+.effort-title { font-size: 18px; font-weight: 600; margin: 0 0 18px; }
+
+.effort-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+.effort-total-num { font-size: 28px; font-weight: 700; line-height: 1.1; }
+.effort-total-label { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+
+.effort-rows { list-style: none; margin: 0; padding: 0; }
+.effort-rows li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+}
+.effort-rows li span { opacity: 0.8; }
+.effort-rows strong { white-space: nowrap; }
+
+.effort-review .staff-badge { margin-bottom: 4px; }
+.effort-review .effort-totals { margin-top: 12px; }
+.effort-actions { display: flex; gap: 8px; margin-top: 14px; }
