@@ -279,5 +279,42 @@ class IncidentEffortSummary(db.Model):
     reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     reviewed_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
+    # Where the numbers currently on the row came from: 'agent' (calculated from the
+    # WhatsApp group) or 'admin' (typed over by an admin on the site). An admin's save
+    # is also their approval, so the page can say which numbers a person last stood
+    # behind. A later agent send overwrites them and goes back to 'agent' + pending.
+    source = db.Column(db.Text, nullable=False, default="agent", server_default="agent")
+    edited_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    edited_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
     def __repr__(self):
         return f"<IncidentEffortSummary monday_item_id={self.monday_item_id!r} status={self.status}>"
+
+
+class EffortSummaryRequest(db.Model):
+    """An admin's "Summarize incident" click, and how far the agent has got with it.
+
+    Separate from IncidentEffortSummary because a summary row can't exist before there
+    are numbers (total_hours is required), but the admin needs to see something the
+    moment they click: "calculating", or "waiting for the officer to answer in the
+    WhatsApp group". One row per Monday item, overwritten by each new click.
+
+    The agent does the work in the background and answers over two routes: the numbers
+    arrive through the existing summary route (which marks this 'done'), and anything
+    that did NOT end in numbers arrives as a status ('needs_input' / 'failed') with a
+    short reason code. A request still 'requested' after a while is shown as failed
+    (see effort_summary_service.REQUEST_STALE_AFTER): an agent restart loses its
+    in-memory work, and the admin must not stare at a spinner forever."""
+
+    __tablename__ = "effort_summary_requests"
+
+    id = db.Column(db.BigInteger().with_variant(db.Integer, "sqlite"), primary_key=True)
+    monday_item_id = db.Column(db.Text, nullable=False, unique=True)
+    state = db.Column(db.Text, nullable=False)  # requested | needs_input | failed | done
+    reason = db.Column(db.Text, nullable=True)  # short code, never free text from the agent
+    requested_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+    requested_by_user_id = db.Column(db.BigInteger, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=db.func.now())
+
+    def __repr__(self):
+        return f"<EffortSummaryRequest monday_item_id={self.monday_item_id!r} state={self.state}>"
