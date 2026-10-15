@@ -164,3 +164,45 @@ def push_officers(officers: list, *, retry: bool = True) -> bool:
     (retry=False) so the page answers fast and says plainly if the agent could not
     be updated; the startup sync retries."""
     return _post(_OFFICERS_PATH, {"officers": officers}, pauses=_RETRY_PAUSES if retry else (), what="officers list")
+
+
+# The agent's endpoint that starts an effort calculation for one incident.
+_EFFORT_REQUEST_PATH = "/api/effort-summary-request"
+
+
+def request_effort_summary(monday_item_id: str) -> tuple[bool, str]:
+    """Asks the agent to calculate the effort summary for a case ("Summarize incident").
+    Returns (accepted, reason): reason is "" once the agent accepted (HTTP 202 — it works
+    in the background and answers through the summary and status routes), else a short
+    code the page turns into advice for the admin: no_group (nobody linked a WhatsApp
+    group to this case), group_not_found, whatsapp_disconnected, agent_not_configured,
+    agent_unreachable, agent_refused (secret mismatch), agent_error.
+
+    One attempt, no retries: an admin is watching, and "try again" is the retry. Never raises."""
+    if not is_configured():
+        return False, "agent_not_configured"
+    try:
+        resp = requests.post(
+            f"{AGENT_BASE_URL}{_EFFORT_REQUEST_PATH}",
+            json={"monday_item_id": str(monday_item_id)},
+            headers={"Authorization": f"Bearer {AGENT_API_SECRET}"},
+            timeout=_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as e:
+        print(f"[agent] effort request: {e.__class__.__name__}")
+        return False, "agent_unreachable"
+
+    if resp.status_code == 202:
+        return True, ""
+    if resp.status_code in (401, 404):
+        print(f"[agent] effort request refused: HTTP {resp.status_code} (check AGENT_API_SECRET matches the agent's)")
+        return False, "agent_refused"
+    if resp.status_code in (409, 503):
+        try:
+            reason = str((resp.json() or {}).get("reason") or "")
+        except ValueError:
+            reason = ""
+        if reason in ("no_group", "group_not_found", "whatsapp_disconnected"):
+            return False, reason
+    print(f"[agent] effort request: HTTP {resp.status_code}")
+    return False, "agent_error"

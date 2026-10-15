@@ -654,6 +654,24 @@ def update_incident(*, item_id: str, fields: dict) -> tuple[bool, list[str]]:
     return True, warnings
 
 
+def write_effort_to_monday(item_id: str, values: dict) -> bool:
+    """Writes an effort summary's numbers to the seven Monday columns the agent also
+    writes (EFFORT_COLUMNS), so a manual edit on the site doesn't leave Monday showing
+    the agent's older numbers. `values` is keyed like IncidentEffortSummary. Nothing
+    but those columns is touched. Returns False on any failure — the caller reports it
+    as a warning (the site copy is saved either way, like the other best-effort writes)."""
+    from app.features.incidents.constants import EFFORT_COLUMNS
+    if not str(item_id).isdigit():
+        return False
+    payload = {}
+    for key, column in EFFORT_COLUMNS.items():
+        n = values.get(key)
+        if n is None:
+            return False
+        payload[column] = str(n)  # a Monday numbers column takes its value as a string
+    return _mutate_columns(str(item_id), payload)
+
+
 def fetch_incidents_by_ids(monday_item_ids: list) -> list:
     """
     Fetch just the given incidents by Monday item id — used for "my

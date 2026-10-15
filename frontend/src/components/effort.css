@@ -24,3 +24,15 @@
 .effort-review .staff-badge { margin-bottom: 4px; }
 .effort-review .effort-totals { margin-top: 12px; }
 .effort-actions { display: flex; gap: 8px; margin-top: 14px; }
+
+/* Manual edit: a compact grid of number boxes, two per row on a wide card, one on a phone. */
+.effort-editor { margin-top: 12px; }
+.effort-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.effort-editor-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.effort-editor-field span { opacity: 0.8; }
+.effort-editor-field .staff-field { width: 100%; box-sizing: border-box; }
+
+/* "Summarize incident" panel */
+.effort-admin .effort-review { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(128, 128, 128, 0.25); }
+.effort-admin .staff-error { margin: 10px 0; }
+.effort-admin .staff-error[data-tone='info'] { background: rgba(79, 70, 229, 0.08); border-color: rgba(79, 70, 229, 0.25); color: inherit; }

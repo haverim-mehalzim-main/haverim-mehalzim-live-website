@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, jsonify
-from app.features.incidents.service import fetch_monday_data, create_incident, update_incident, fetch_incidents_by_ids, compose_location
+from app.features.incidents.service import fetch_monday_data, create_incident, update_incident, fetch_incidents_by_ids, compose_location, write_effort_to_monday
 from app.features.incidents.tracker_service import fetch_case_status, progress_from_row
 from app.features.incidents.donor_service import fetch_donor_by_token, is_valid_token_format, fetch_leaderboard
 from app.features.incidents.feedback_service import (
@@ -20,7 +20,7 @@ from app.features.incidents.payment_service import (
     SUPPORTED_CURRENCIES,
 )
 from app.features.incidents.donation_service import record_confirmed_payment
-from app.features.incidents import email_service, whatsapp_service
+from app.features.incidents import agent_service, email_service, whatsapp_service
 from app.features.incidents.analysis import (
     count_incidents_per_type,
     get_incidents_current_year,
@@ -938,7 +938,7 @@ def _any_effort_summary(monday_item_id: str) -> dict | None:
     """What an admin sees on the case page: the latest estimate in any state, so
     the page can say it is waiting for approval and offer the decision there."""
     row = effort_summary_service.get_for_item(monday_item_id)
-    return effort_summary_service.serialize(row) if row is not None else None
+    return effort_summary_service.serialize(row, for_admin=True) if row is not None else None
 
 
 def _staff_role_check(*, admin_only: bool = False):
@@ -2040,6 +2040,23 @@ def deny_incident_volunteer(local_id, request_id):
     return jsonify({'success': True}), 200
 
 
+def _agent_auth_failure():
+    """None when the caller is the WhatsApp agent (right Bearer secret), else the response
+    to return. Unset secret on the site = the agent routes are disabled (404), so a
+    deployment that never configured it can't be written to. Hashed first so the
+    comparison takes the same time whatever the lengths."""
+    from flask import request
+    from app.config import AGENT_API_SECRET
+
+    if not AGENT_API_SECRET:
+        return jsonify({'success': False}), 404
+    header = request.headers.get('Authorization', '')
+    sent = header[len('Bearer '):] if header.startswith('Bearer ') else ''
+    if not hmac.compare_digest(hashlib.sha256(sent.encode()).digest(), hashlib.sha256(AGENT_API_SECRET.encode()).digest()):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    return None
+
+
 @incidents_bp.route('/api/agent/effort-summary', methods=['POST'])
 def agent_effort_summary():
     """The WhatsApp agent posts the effort estimate it just wrote to Monday
@@ -2051,15 +2068,10 @@ def agent_effort_summary():
     Bearer token. Unset on the site = the endpoint is disabled (404), so a
     deployment that never configured it can't be written to."""
     from flask import request
-    from app.config import AGENT_API_SECRET
 
-    if not AGENT_API_SECRET:
-        return jsonify({'success': False}), 404
-    header = request.headers.get('Authorization', '')
-    sent = header[len('Bearer '):] if header.startswith('Bearer ') else ''
-    # Hashed first so the comparison takes the same time whatever the lengths.
-    if not hmac.compare_digest(hashlib.sha256(sent.encode()).digest(), hashlib.sha256(AGENT_API_SECRET.encode()).digest()):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    denied = _agent_auth_failure()
+    if denied is not None:
+        return denied
 
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
@@ -2070,6 +2082,103 @@ def agent_effort_summary():
         return jsonify({'success': False, 'message': e.message}), e.status_code
     db.session.commit()
     return jsonify({'success': True, 'status': row.status}), 200
+
+
+@incidents_bp.route('/api/agent/effort-summary-status', methods=['POST'])
+def agent_effort_summary_status():
+    """The agent reports that a "Summarize incident" request ended WITHOUT numbers:
+    it needs input from the WhatsApp group (roles, field days...) or it failed.
+    (Numbers arrive through /api/agent/effort-summary.) State and a reason CODE only;
+    see effort_summary_service.report_status."""
+    from flask import request
+
+    denied = _agent_auth_failure()
+    if denied is not None:
+        return denied
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'success': False, 'message': 'JSON body required'}), 400
+    try:
+        row = effort_summary_service.report_status(body)
+    except effort_summary_service.EffortSummaryError as e:
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+    db.session.commit()
+    return jsonify({'success': True, 'state': row.state}), 200
+
+
+def _effort_panel(monday_item_id: str) -> dict:
+    """Everything the admin's "Summarize incident" panel shows for one case."""
+    row = effort_summary_service.get_for_item(monday_item_id)
+    return {
+        'success': True,
+        'summary': effort_summary_service.serialize(row, for_admin=True) if row is not None else None,
+        'request': effort_summary_service.serialize_request(effort_summary_service.get_request(monday_item_id)),
+    }
+
+
+@incidents_bp.route('/api/staff/incidents/<monday_item_id>/effort-summary')
+def staff_effort_panel(monday_item_id):
+    """The latest summary (any state) and the state of the last "Summarize incident"
+    click. The page polls this while the agent is working."""
+    if _staff_role_check(admin_only=True) is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    if not monday_item_id.isdigit():
+        return jsonify({'success': False, 'message': 'Invalid case ID'}), 400
+    return jsonify(_effort_panel(monday_item_id)), 200
+
+
+@incidents_bp.route('/api/staff/incidents/<monday_item_id>/effort-summary/request', methods=['POST'])
+def staff_request_effort_summary(monday_item_id):
+    """"Summarize incident": asks the WhatsApp agent to calculate the hours. The agent
+    works in the background and the numbers arrive pending for approval (or the agent
+    asks the officer what it is missing, in the group). A new calculation replaces the
+    numbers on file and puts them back to pending, so figures an admin never saw are
+    never shown under an earlier approval."""
+    user = _staff_role_check(admin_only=True)
+    if user is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    if not monday_item_id.isdigit():
+        return jsonify({'success': False, 'message': 'Invalid case ID'}), 400
+
+    effort_summary_service.begin_request(monday_item_id, user)
+    db.session.commit()
+
+    accepted, reason = agent_service.request_effort_summary(monday_item_id)
+    if not accepted:
+        effort_summary_service.fail_request(monday_item_id, reason)
+        db.session.commit()
+        return jsonify({**_effort_panel(monday_item_id), 'success': False, 'reason': reason}), 409 if reason in ('no_group', 'group_not_found') else 502
+    return jsonify(_effort_panel(monday_item_id)), 202
+
+
+@incidents_bp.route('/api/staff/effort-summaries/<int:summary_id>', methods=['PUT'])
+def staff_edit_effort_summary(summary_id):
+    """An admin types over the numbers, before or after approval. The save is the
+    approval: the summary is shown to the caller and family straight away, and the same
+    numbers are written to the Monday columns the agent uses, so the board and the site
+    agree. A Monday failure is reported as a warning; the site copy is saved either way."""
+    from flask import request
+
+    user = _staff_role_check(admin_only=True)
+    if user is None:
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    row = db.session.get(IncidentEffortSummary, summary_id)
+    if row is None:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'success': False, 'message': 'JSON body required'}), 400
+    try:
+        effort_summary_service.edit(row, body, user)
+    except effort_summary_service.EffortSummaryError as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': e.message}), e.status_code
+    db.session.commit()
+
+    warnings = []
+    if not write_effort_to_monday(row.monday_item_id, effort_summary_service.monday_values(row)):
+        warnings.append("Saved on the site, but Monday could not be updated — the board still shows the previous numbers.")
+    return jsonify({'success': True, 'summary': effort_summary_service.serialize(row, for_admin=True), 'warnings': warnings}), 200
 
 
 @incidents_bp.route('/api/staff/effort-summaries')
@@ -2104,7 +2213,7 @@ def _review_effort_summary(summary_id: int, *, approve: bool):
         return jsonify({'success': False, 'message': 'Not found'}), 404
     effort_summary_service.review(row, approve=approve, reviewer=user)
     db.session.commit()
-    return jsonify({'success': True, 'summary': effort_summary_service.serialize(row)}), 200
+    return jsonify({'success': True, 'summary': effort_summary_service.serialize(row, for_admin=True)}), 200
 
 
 @incidents_bp.route('/api/staff/effort-summaries/<int:summary_id>/approve', methods=['POST'])

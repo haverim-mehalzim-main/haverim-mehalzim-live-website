@@ -326,3 +326,18 @@ PREMIUM_PAYMENTS_ENABLED = False
 # adding a second tier later is a matter of introducing more plan names, not
 # hunting down every place "standard" was typed.
 PREMIUM_PLAN_DEFAULT = "standard"
+
+# Monday columns the effort summary is kept in — the SAME seven the WhatsApp agent
+# writes (incident_management: config/mondayMap.js EFFORT_COLUMNS), so an admin's edit
+# on the site and the agent's calculation land in the same place and never disagree.
+# Only these seven exist on the board: "field operations" and "other volunteers" are
+# part of the total but have no column of their own (neither does the agent write them).
+EFFORT_COLUMNS = {
+    'total_hours':          'numeric_mksvcn34',  # total volunteer hours
+    'supervisors_hours':    'numeric_mm85sap5',
+    'case_managers_hours':  'numeric_mm85cved',
+    'command_center_hours': 'numeric_mm854dne',
+    'doctors_hours':        'numeric_mm85bt49',
+    'mental_health_hours':  'numeric_mm85xb2e',
+    'volunteers_count':     'numeric_mkmb60bf',
+}
