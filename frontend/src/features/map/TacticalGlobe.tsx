@@ -7,6 +7,7 @@ import { useDonate } from '../../context/DonateContext';
 
 const DONATE_URL = 'https://www.jgive.com/new/en/usd/donation-targets/110214';
 const GOLD = '#D4AF37';
+const PENDING = '#4da6ff';
 
 const SUCCESS_METRICS: Record<string, string> = {
   'Medical':          'Medical Care Delivered',
@@ -48,6 +49,7 @@ interface GlobeCluster {
   count: number;
   liveCount: number;
   resolvedCount: number;
+  pendingCount: number;
   hasLive: boolean;
 }
 
@@ -76,6 +78,7 @@ function clusterByLocation(incidents: GlobeIncident[]): GlobeCluster[] {
       nearest.count++;
       if (inc.isLive)    { nearest.liveCount++; nearest.hasLive = true; }
       if (inc.isResolved)  nearest.resolvedCount++;
+      if (inc.isPending)   nearest.pendingCount++;
     } else {
       result.push({
         id: `${inc.lat.toFixed(4)},${inc.lng.toFixed(4)}`,
@@ -86,6 +89,7 @@ function clusterByLocation(incidents: GlobeIncident[]): GlobeCluster[] {
         count: 1,
         liveCount: inc.isLive ? 1 : 0,
         resolvedCount: inc.isResolved ? 1 : 0,
+        pendingCount: inc.isPending ? 1 : 0,
         hasLive: inc.isLive,
       });
     }
@@ -109,7 +113,13 @@ function clusterByLocation(incidents: GlobeIncident[]): GlobeCluster[] {
 }
 
 function clusterColor(c: GlobeCluster): string {
-  return c.hasLive ? '#ff5050' : '#ffb930';
+  if (c.hasLive) return '#ff5050';
+  return c.pendingCount === c.count ? PENDING : '#ffb930';
+}
+
+function incidentAccent(inc: GlobeIncident): string {
+  if (inc.isLive) return '#ff5050';
+  return inc.isPending ? PENDING : '#ffb930';
 }
 
 function clusterRadius(c: GlobeCluster): number {
@@ -189,6 +199,57 @@ function IncidentDetail({
   const accentColor = isResolved ? GOLD : '#00e6a0';
   const metric      = SUCCESS_METRICS[incident.type] ?? 'Mission Completed';
   const hasStory    = incident.description || incident.assistance;
+
+  // A request not yet approved: place and type only, no story and no
+  // incident-specific donation (it isn't an active mission yet).
+  if (incident.isPending) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-5">
+          <span className="text-[11px] tracking-[0.28em] uppercase font-bold" style={{ color: PENDING }}>
+            ◈ Incoming Request
+          </span>
+          <div className="flex items-center gap-1">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="text-[#3d5a72] hover:text-[#00e6a0] transition-colors text-lg leading-none px-1"
+                title="Back to list"
+              >‹</button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-[#3d5a72] hover:text-white transition-colors text-lg leading-none px-1"
+            >✕</button>
+          </div>
+        </div>
+        <div className="mb-5">
+          <div className="text-[11px] tracking-[0.2em] text-[#3d5a72] uppercase mb-1">
+            {incident.locationName} · {incident.type}
+          </div>
+          <div className="text-2xl font-bold text-white mb-2">{incident.label}</div>
+          <div
+            className="inline-flex items-center gap-1.5 text-xs font-bold tracking-[0.2em] uppercase px-2.5 py-1 rounded-sm"
+            style={{ color: PENDING, background: `${PENDING}15`, border: `1px solid ${PENDING}33` }}
+          >
+            Awaiting Review
+          </div>
+        </div>
+        <p className="text-sm text-[#5a7a90] leading-relaxed mb-5">
+          A new request has just reached our team and is being reviewed. Details are shared once a mission is opened.
+        </p>
+        <a
+          href={DONATE_URL}
+          onClick={e => { e.preventDefault(); openDonate(); }}
+          className="flex items-center justify-center gap-2 w-full text-sm tracking-[0.18em] uppercase font-bold px-4 py-3 rounded transition-opacity hover:opacity-90"
+          style={{ background: '#00e6a0', color: '#0B0E11' }}
+        >
+          <span>♥</span>
+          <span>Support Our Mission</span>
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -369,6 +430,9 @@ function ClusterPanel({
             {cluster.resolvedCount > 0 && (
               <span className="text-amber-400">{cluster.resolvedCount} resolved</span>
             )}
+            {cluster.pendingCount > 0 && (
+              <span style={{ color: PENDING }}>{cluster.pendingCount} pending</span>
+            )}
           </div>
         </div>
         <button
@@ -385,15 +449,15 @@ function ClusterPanel({
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#1e3040 transparent' }}
       >
         {cluster.incidents.map((inc) => {
-          const accent = inc.isLive ? '#ff5050' : '#ffb930';
+          const accent = incidentAccent(inc);
           return (
             <button
               key={inc.id}
               onClick={() => onSelectIncident(inc)}
               className="flex items-center gap-2 px-2 py-1.5 rounded text-left w-full transition-colors hover:bg-white/5 group"
               style={{
-                border: `1px solid ${inc.isLive ? 'rgba(255,80,80,0.18)' : 'rgba(255,185,48,0.14)'}`,
-                background: inc.isLive ? 'rgba(255,80,80,0.04)' : 'rgba(255,185,48,0.03)',
+                border: `1px solid ${accent}2e`,
+                background: `${accent}08`,
               }}
             >
               {inc.isLive ? (
@@ -402,7 +466,7 @@ function ClusterPanel({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                 </span>
               ) : (
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#ffb930' }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accent }} />
               )}
               <div className="flex-1 min-w-0">
                 <div className={`${rowLabel} font-bold text-white truncate`}>{inc.label}</div>
@@ -412,7 +476,7 @@ function ClusterPanel({
                 className={`${rowMeta} tracking-wider font-bold flex-shrink-0`}
                 style={{ color: accent }}
               >
-                {inc.isLive ? 'LIVE' : 'DONE'}
+                {inc.isLive ? 'LIVE' : inc.isPending ? 'PENDING' : 'DONE'}
               </span>
               <span className="text-[#3d5a72] text-[10px] group-hover:text-[#00e6a0] transition-colors">›</span>
             </button>
@@ -511,6 +575,7 @@ export default function TacticalGlobe() {
   const [searchQuery,       setSearchQuery]       = useState('');
   const [filterLive,        setFilterLive]        = useState(false);
   const [filterResolved,    setFilterResolved]    = useState(false);
+  const [filterPending,     setFilterPending]     = useState(false);
 
   const searchInputRef     = useRef<HTMLInputElement>(null);
   const mobileSearchRef    = useRef<HTMLInputElement>(null);
@@ -530,11 +595,12 @@ export default function TacticalGlobe() {
 
   const displayedIncidents = useMemo(() => {
     let result = selectedTypes.size === 0 ? incidents : incidents.filter(i => selectedTypes.has(i.type));
-    if (filterLive && !filterResolved)    result = result.filter(i => i.isLive);
-    if (filterResolved && !filterLive)    result = result.filter(i => i.isResolved);
-    if (filterLive && filterResolved)     result = result.filter(i => i.isLive || i.isResolved);
+    if (filterLive || filterResolved || filterPending) {
+      result = result.filter(i =>
+        (filterLive && i.isLive) || (filterResolved && i.isResolved) || (filterPending && i.isPending));
+    }
     return result;
-  }, [incidents, selectedTypes, filterLive, filterResolved]);
+  }, [incidents, selectedTypes, filterLive, filterResolved, filterPending]);
 
   const clusters    = useMemo(() => clusterByLocation(displayedIncidents), [displayedIncidents]);
   const allClusters = useMemo(() => clusterByLocation(incidents), [incidents]);
@@ -549,7 +615,8 @@ export default function TacticalGlobe() {
 
   const liveIncidents     = useMemo(() => displayedIncidents.filter(i => i.isLive),     [displayedIncidents]);
   const resolvedIncidents = useMemo(() => displayedIncidents.filter(i => i.isResolved), [displayedIncidents]);
-  const filteredTotal     = useMemo(() => liveIncidents.length + resolvedIncidents.length, [liveIncidents, resolvedIncidents]);
+  const pendingIncidents  = useMemo(() => displayedIncidents.filter(i => i.isPending),  [displayedIncidents]);
+  const filteredTotal     = displayedIncidents.length;
   const ringData          = useMemo(() => clusters.filter(c => c.hasLive), [clusters]);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
@@ -607,7 +674,8 @@ export default function TacticalGlobe() {
 
   const toggleLiveFilter     = useCallback(() => setFilterLive(v => !v),     []);
   const toggleResolvedFilter = useCallback(() => setFilterResolved(v => !v), []);
-  const resetStatusFilter    = useCallback(() => { setFilterLive(false); setFilterResolved(false); }, []);
+  const togglePendingFilter  = useCallback(() => setFilterPending(v => !v),  []);
+  const resetStatusFilter    = useCallback(() => { setFilterLive(false); setFilterResolved(false); setFilterPending(false); }, []);
 
   const handleSearchSelect = useCallback((cluster: GlobeCluster) => {
     setSearchQuery('');
@@ -680,7 +748,7 @@ export default function TacticalGlobe() {
 
     if (c.count === 1) {
       const inc = c.incidents[0];
-      const status = inc.isLive ? '● LIVE' : '✓ RESOLVED';
+      const status = inc.isLive ? '● LIVE' : inc.isPending ? '◌ PENDING' : '✓ RESOLVED';
       return `<div style="background:#0b0e11ee;border:1px solid ${accent};padding:6px 10px;
                   color:${accent};font:11px/1.6 'JetBrains Mono',monospace;border-radius:3px;">
         <strong>${inc.label}</strong> · ${inc.locationName}<br/>
@@ -690,12 +758,14 @@ export default function TacticalGlobe() {
 
     const liveText     = c.liveCount > 0     ? `<span style="color:#ff5050">${c.liveCount} live</span>`         : '';
     const resolvedText = c.resolvedCount > 0 ? `<span style="color:#ffb930">${c.resolvedCount} resolved</span>` : '';
+    const pendingText  = c.pendingCount > 0  ? `<span style="color:${PENDING}">${c.pendingCount} pending</span>`  : '';
     const sep          = c.liveCount > 0 && c.resolvedCount > 0 ? ' · ' : '';
+    const sep2         = (c.liveCount > 0 || c.resolvedCount > 0) && c.pendingCount > 0 ? ' · ' : '';
 
     return `<div style="background:#0b0e11ee;border:1px solid ${accent};padding:6px 10px;
                 color:${accent};font:11px/1.6 'JetBrains Mono',monospace;border-radius:3px;">
       <strong>${c.locationName}</strong><br/>
-      ${c.count} incidents · ${liveText}${sep}${resolvedText}<br/>
+      ${c.count} incidents · ${liveText}${sep}${resolvedText}${sep2}${pendingText}<br/>
       <span style="color:#3d5a72;font-size:9px">click to view all</span>
     </div>`;
   }, []);
@@ -783,6 +853,7 @@ export default function TacticalGlobe() {
           <StatusRow label="Operations" value={filteredTotal}          color="text-white" />
           <StatusRow label="Live"       value={liveIncidents.length}   color="text-red-400" />
           <StatusRow label="Resolved"   value={resolvedIncidents.length} color="text-amber-400" />
+          <StatusRow label="Pending"    value={pendingIncidents.length}  color="text-sky-400" />
           {selectedTypes.size > 0 && (
             <div className="mt-2 pt-2 border-t border-[#00e6a0]/15 text-[8px] text-[#00e6a0] tracking-wider">
               FILTERED · {selectedTypes.size} TYPE{selectedTypes.size > 1 ? 'S' : ''}
@@ -860,11 +931,11 @@ export default function TacticalGlobe() {
                   key={cluster.id}
                   onClick={() => handleSearchSelect(cluster)}
                   className="flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors hover:bg-white/5 group"
-                  style={{ border: `1px solid ${cluster.hasLive ? 'rgba(255,80,80,0.18)' : 'rgba(255,185,48,0.14)'}` }}
+                  style={{ border: `1px solid ${clusterColor(cluster)}2e` }}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ background: cluster.hasLive ? '#ff5050' : '#ffb930',
+                      style={{ background: clusterColor(cluster),
                                boxShadow: cluster.hasLive ? '0 0 4px #ff5050' : 'none' }} />
                     <span className="text-[10px] text-[#c0d0e0] truncate">{cluster.locationName}</span>
                   </div>
@@ -900,7 +971,7 @@ export default function TacticalGlobe() {
         <div className="border border-[#00e6a0]/20 bg-[#0B0E11]/85 px-3 py-2.5 space-y-1.5 pointer-events-auto">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[8px] text-[#00e6a0] tracking-[0.2em] uppercase">Legend</span>
-            {(filterLive || filterResolved)
+            {(filterLive || filterResolved || filterPending)
               ? <button onClick={resetStatusFilter} className="text-[8px] text-[#3d5a72] hover:text-[#00e6a0] tracking-wider uppercase transition-colors">Reset</button>
               : <span className="text-[8px] text-[#3d5a72] tracking-wider">tap to filter</span>
             }
@@ -931,6 +1002,18 @@ export default function TacticalGlobe() {
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#ffb930' }} />
             <span className="text-[9px] text-amber-400 tracking-[0.2em] uppercase flex-1">Resolved incident</span>
             <Tooltip text="Incident successfully handled — outcome confirmed by our team" />
+          </button>
+          <button
+            onClick={togglePendingFilter}
+            className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded transition-colors"
+            style={{
+              background: filterPending ? `${PENDING}1a` : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${filterPending ? PENDING + '4d' : 'rgba(255,255,255,0.08)'}`,
+            }}
+          >
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PENDING }} />
+            <span className="text-[9px] tracking-[0.2em] uppercase flex-1" style={{ color: PENDING }}>Pending request</span>
+            <Tooltip text="New request awaiting review — only the place and type are shown" />
           </button>
         </div>
       </div>
@@ -971,6 +1054,7 @@ export default function TacticalGlobe() {
         <div className="flex flex-col items-end gap-1">
           <span className="text-[12px] font-bold text-red-400 tabular-nums">{liveIncidents.length} live</span>
           <span className="text-[11px] font-bold text-amber-400 tabular-nums">{resolvedIncidents.length} resolved</span>
+          <span className="text-[10px] font-bold text-sky-400 tabular-nums">{pendingIncidents.length} pending</span>
         </div>
       </div>
 
@@ -1022,13 +1106,13 @@ export default function TacticalGlobe() {
                   onClick={() => handleSearchSelect(cluster)}
                   className="flex items-center justify-between px-3 py-3 rounded text-left active:opacity-60 transition-opacity"
                   style={{
-                    background: cluster.hasLive ? 'rgba(255,80,80,0.06)' : 'rgba(255,185,48,0.05)',
-                    border:     `1px solid ${cluster.hasLive ? 'rgba(255,80,80,0.25)' : 'rgba(255,185,48,0.18)'}`,
+                    background: `${clusterColor(cluster)}0d`,
+                    border:     `1px solid ${clusterColor(cluster)}40`,
                   }}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ background: cluster.hasLive ? '#ff5050' : '#ffb930',
+                      style={{ background: clusterColor(cluster),
                                boxShadow: cluster.hasLive ? '0 0 6px #ff5050' : 'none' }} />
                     <div>
                       <div className="text-[14px] text-white font-semibold truncate leading-tight">{cluster.locationName}</div>
@@ -1060,7 +1144,7 @@ export default function TacticalGlobe() {
         <button
           onClick={() => { setMobileFilterOpen(o => !o); setSelectedIncident(null); setSelectedCluster(null); }}
           className="flex items-center gap-2 text-[10px] tracking-[0.15em] uppercase transition-colors"
-          style={{ color: (mobileFilterOpen || selectedTypes.size > 0 || filterLive || filterResolved) ? '#00e6a0' : '#7a9ab5' }}
+          style={{ color: (mobileFilterOpen || selectedTypes.size > 0 || filterLive || filterResolved || filterPending) ? '#00e6a0' : '#7a9ab5' }}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -1132,7 +1216,7 @@ export default function TacticalGlobe() {
           <div className="border-t border-[#00e6a0]/15 mt-4 pt-4 space-y-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[9px] text-[#00e6a0] tracking-[0.2em] uppercase">Legend</span>
-              {(filterLive || filterResolved)
+              {(filterLive || filterResolved || filterPending)
                 ? <button onClick={resetStatusFilter} className="text-[9px] text-[#3d5a72] hover:text-[#00e6a0] tracking-wider uppercase transition-colors">Reset</button>
                 : <span className="text-[9px] text-[#3d5a72] tracking-wider">tap to filter</span>
               }
@@ -1163,6 +1247,18 @@ export default function TacticalGlobe() {
               <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: '#ffb930' }} />
               <span className="text-[12px] text-amber-400 flex-1">Resolved incident</span>
               <Tooltip text="Incident successfully handled — outcome confirmed by our team" />
+            </button>
+            <button
+              onClick={togglePendingFilter}
+              className="flex items-center gap-3 w-full text-left px-3 py-2 rounded"
+              style={{
+                background: filterPending ? `${PENDING}1a` : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${filterPending ? PENDING + '4d' : 'rgba(255,255,255,0.08)'}`,
+              }}
+            >
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: PENDING }} />
+              <span className="text-[12px] flex-1" style={{ color: PENDING }}>Pending request</span>
+              <Tooltip text="New request awaiting review — only the place and type are shown" />
             </button>
           </div>
 
@@ -1212,7 +1308,7 @@ export default function TacticalGlobe() {
             style={{
               maxWidth: 520,
               maxHeight: '88vh',
-              border: `1px solid ${selectedIncident.isResolved ? GOLD + '55' : '#00e6a04d'}`,
+              border: `1px solid ${selectedIncident.isPending ? PENDING + '55' : selectedIncident.isResolved ? GOLD + '55' : '#00e6a04d'}`,
               scrollbarWidth: 'thin',
               scrollbarColor: '#1e3040 transparent',
               boxShadow: `0 0 48px ${selectedIncident.isResolved ? GOLD + '1a' : '#00e6a01a'}`,

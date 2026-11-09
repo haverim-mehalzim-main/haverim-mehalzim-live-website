@@ -38,6 +38,8 @@ from app.features.incidents.constants import (
     INCIDENT_HANDLED_BY_RON,
     SIGNIFICANT_INCIDENT,
     MAP_VISIBLE_STATUSES,
+    MAP_PENDING_STATUSES,
+    MAP_PENDING_PUBLIC_FIELDS,
     PREMIUM_PAYMENTS_ENABLED,
     ACTIVE_VOLUNTEERS_COUNT,
     PREMIUM_PRICE_USD,
@@ -210,15 +212,23 @@ def get_dashboard_data():
 
 @incidents_bp.route('/api/incidents')
 def get_incidents():
-    """The public map's data. Only incidents an admin has approved (or that are
-    already done) are returned: this endpoint is unauthenticated, so filtering
-    here — not just in the map's frontend — is what keeps a still-unreviewed
-    request, or a rejected one, from being readable by anyone who calls it."""
+    """The public map's data. Approved (or already done) incidents are returned
+    in full; a still-unreviewed request is returned too, but cut down to its
+    type and place only. This endpoint is unauthenticated, so the filtering and
+    the field stripping happen here — not just in the map's frontend — which
+    keeps a pending request's story, and any rejected request, from being
+    readable by anyone who calls it."""
     incidents = fetch_monday_data()
     if incidents is None:
         return jsonify({'success': False, 'message': 'Failed to fetch incidents', 'data': []}), 500
 
-    visible = [r for r in incidents if (r.get('status_mkmbjwef') or '').strip() in MAP_VISIBLE_STATUSES]
+    visible = []
+    for r in incidents:
+        status = (r.get('status_mkmbjwef') or '').strip()
+        if status in MAP_VISIBLE_STATUSES:
+            visible.append(r)
+        elif status in MAP_PENDING_STATUSES:
+            visible.append({k: r.get(k) for k in MAP_PENDING_PUBLIC_FIELDS})
     return jsonify({
         'success': True,
         'data': visible,

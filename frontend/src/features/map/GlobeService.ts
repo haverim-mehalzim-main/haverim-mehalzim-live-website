@@ -32,6 +32,7 @@ export interface GlobeIncident {
   country: string;
   isLive: boolean;      // status_mkmbjwef in LIVE_STATUSES
   isResolved: boolean;  // status_mkmbjwef in HANDLED_STATUSES
+  isPending: boolean;   // not yet approved: shown as a bare pin, no story
   description: string;  // what happened (text_mm42945p)
   assistance: string;   // how we helped (text_mm2rbp1q)
 }
@@ -62,13 +63,18 @@ function translateType(raw: string): string {
 const LIVE_STATUSES    = new Set(['Live', 'Active', 'Working on it']);
 const HANDLED_STATUSES = new Set(['Done', 'Completed']);
 
+/** Not yet approved by an admin — plotted, but only as place + type. */
+const PENDING_STATUSES = new Set(['New Request by User']);
+
 /**
- * Only approved incidents are plotted: Live (an admin approved it) or Handled
- * (closed). "New Request by User", "Rejected" and an empty status are not.
- * /api/incidents already filters the same way (MAP_VISIBLE_STATUSES); this is
- * the second check, so the map stays right even if the API is ever loosened.
+ * Plotted incidents: Live (an admin approved it), Handled (closed), or Pending
+ * (a new request — shown without its story). "Rejected" and an empty status are
+ * not. /api/incidents already filters the same way (MAP_VISIBLE_STATUSES and
+ * MAP_PENDING_STATUSES, and strips a pending incident down to place + type);
+ * this is the second check, so the map stays right even if the API is loosened.
  */
-const isMapVisible = (status: string) => LIVE_STATUSES.has(status) || HANDLED_STATUSES.has(status);
+const isMapVisible = (status: string) =>
+  LIVE_STATUSES.has(status) || HANDLED_STATUSES.has(status) || PENDING_STATUSES.has(status);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Processing
@@ -105,6 +111,7 @@ function processIncidents(raw: RawIncident[]): GlobeIncident[] {
 
     const isLive     = LIVE_STATUSES.has(status);
     const isResolved = HANDLED_STATUSES.has(status);
+    const isPending  = PENDING_STATUSES.has(status);
 
     mapped.push({
       id:           inc.id,
@@ -116,8 +123,9 @@ function processIncidents(raw: RawIncident[]): GlobeIncident[] {
       country:      inc.country_mkmb91h3?.trim() ?? 'Unknown',
       isLive,
       isResolved,
-      description:  inc.text_mm42945p?.trim() ?? '',
-      assistance:   inc.text_mm2rbp1q?.trim()  ?? '',
+      isPending,
+      description:  isPending ? '' : inc.text_mm42945p?.trim() ?? '',
+      assistance:   isPending ? '' : inc.text_mm2rbp1q?.trim()  ?? '',
     });
   });
 
@@ -149,7 +157,8 @@ export async function fetchGlobeIncidents(): Promise<GlobeIncident[]> {
     `api_filtered=${countDisplayed} ` +
     `coord_resolved=${incidents.length} ` +
     `(live=${incidents.filter(i => i.isLive).length} ` +
-    `resolved=${incidents.filter(i => i.isResolved).length})`
+    `resolved=${incidents.filter(i => i.isResolved).length} ` +
+    `pending=${incidents.filter(i => i.isPending).length})`
   );
 
   return incidents;

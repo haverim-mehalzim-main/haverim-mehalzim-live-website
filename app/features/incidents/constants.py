@@ -20,19 +20,36 @@ STATUS_TRANSLATIONS = {
 MAP_LIVE_STATUSES     = {'Live', 'Active', 'Working on it'}
 MAP_HANDLED_STATUSES  = {'Done', 'Completed'}
 
-# Statuses an incident may have to appear on the public map at all: an admin has
+# Statuses whose incident appears on the public map in full: an admin has
 # approved it (Working on it) or it has since been closed (Done). Anything else —
-# New Request by User (not yet approved), Rejected, or no status — stays off the
-# map. A positive list rather than "not New Request", so a status added to the
-# board later is hidden until someone decides it belongs on the map.
+# Rejected or no status — stays off the map; a still-unreviewed "New Request by
+# User" shows only as a bare pin (see MAP_PENDING_STATUSES below). A positive
+# list rather than "not Rejected", so a status added to the board later is
+# hidden until someone decides it belongs on the map.
 MAP_VISIBLE_STATUSES  = MAP_LIVE_STATUSES | MAP_HANDLED_STATUSES
+
+# The only columns of a pending incident the public map endpoint may return:
+# type, place, and the status itself (the map needs it to style the pin).
+MAP_PENDING_PUBLIC_FIELDS = (
+    'id',
+    'status_mkmbjwef',
+    'status_mkmb1zc6',
+    'location_mkmbv7be',
+    'country_mkmb91h3',
+    'country_code',
+)
 
 # status_mkmbjwef value set on a freshly opened incident, whether through the
 # app (see create_incident in service.py) or by the WhatsApp agent's intake.
-# Deliberately outside both sets above — an unreviewed incident must not show on
-# the map or count as handled until an admin approves it (which moves it to
-# "Working on it" and sets the case status to "נפתח אירוע").
+# Deliberately outside both sets above — an unreviewed incident must not show in
+# full on the map or count as handled until an admin approves it (which moves it
+# to "Working on it" and sets the case status to "נפתח אירוע").
 NEW_REQUEST_STATUS = "New Request by User"
+
+# Not yet approved. Shown on the map as a bare pin — place and incident type
+# only, never the description, assistance or name. The stripping is server-side
+# (MAP_PENDING_PUBLIC_FIELDS), because the map endpoint is unauthenticated.
+MAP_PENDING_STATUSES = {NEW_REQUEST_STATUS}
 
 # status_mkmb1zc6 Hebrew → English translations
 INCIDENT_TYPE_TRANSLATIONS = {
